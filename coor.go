@@ -27,10 +27,12 @@ type Coor struct {
     tunnel *Tunnel
     linkset *LinkSet
     wg sync.WaitGroup
+    outCh chan interface {}
 }
 
-func (self *Coor) SetTunnel(tunnel *Tunnel) {
+func (self *Coor) SetTunnel(tunnel *Tunnel, ch chan interface{}) {
     self.tunnel = tunnel
+    self.outCh = ch
 }
 
 func (self *Coor) Start() error {
@@ -128,6 +130,6 @@ func (self *Coor) Dispatch() {
 func NewCoor(gate bool, capacity uint16) *Coor {
     linkset := NewLinkSet(capacity)
     var wg sync.WaitGroup
-    return &Coor{gate, nil, linkset, wg}
+    return &Coor{gate, nil, linkset, wg, nil}
 }
 

@@ -40,10 +40,20 @@ func (self *BackServer) handleClient(conn *net.TCPConn) {
     defer conn.Close()
 
     logger.Printf("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
-    tunnel := NewTunnel(conn)
-    self.coor.SetTunnel(tunnel)
-    self.coor.Start()
-    self.coor.Wait()
+    ch := make(chan interface{}, 65535)
+    self.wg.Add(1)
+    go func() {
+        defer self.wg.Done()
+
+        tunnel := NewTunnel(conn)
+        self.coor.SetTunnel(tunnel, ch)
+        self.coor.Start()
+        self.coor.Wait()
+    }()
+
+    for payload := range ch {
+        logger.Printf("payload:%v", payload)
+    }
 }
 
 func (self *BackServer) Stop() {

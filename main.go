@@ -136,7 +136,7 @@ func main() {
         app.Add(frontDoor)
         app.Add(backDoor)
     } else {
-        backClient := NewBackClient(options.backAddr, coor)
+        backClient := NewBackClient(options.configFile, options.backAddr, coor)
         app.Add(backClient)
     }
 

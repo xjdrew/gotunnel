@@ -98,7 +98,7 @@ func handleSignal(app *App) {
 
 type Options struct {
     gate bool
-    capacity int
+    capacity uint16
     frontAddr string
     backAddr string
     configFile string
@@ -113,7 +113,6 @@ func usage() {
 
 func main() {
     flag.BoolVar(&options.gate, "gate", false, "as gate or node")
-    flag.IntVar(&options.capacity, "capacity", 0xffff, "max concurrent connections(65535)")
     flag.StringVar(&options.frontAddr, "front_addr", "0.0.0.0:8001", "front door address(0.0.0.0:8001)")
     flag.StringVar(&options.backAddr, "back_addr", "0.0.0.0:8002", "back door address(0.0.0.0:8002)")
     flag.Usage = usage
@@ -127,6 +126,8 @@ func main() {
             options.configFile = args[0]
         }
     }
+
+    options.capacity = 65535
 
     app := new(App)
     coor := NewCoor(options.gate, uint16(options.capacity))

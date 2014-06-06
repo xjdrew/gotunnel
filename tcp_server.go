@@ -51,8 +51,3 @@ func (self *TcpServer) closeListener() {
     }
 }
 
-func NewTcpServer(addr string) *TcpServer {
-    server := TcpServer{addr, nil}
-    return &server
-}
-

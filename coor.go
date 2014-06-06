@@ -17,22 +17,15 @@ const (
     LINK_DESTROY 
 )
 
-type CmdBody struct {
+type CmdPayload struct {
     Cmd    uint8
     Linkid uint16
 }
 
 type Coor struct {
-    gate bool
     tunnel *Tunnel
-    linkset *LinkSet
-    wg sync.WaitGroup
     outCh chan interface {}
-}
-
-func (self *Coor) SetTunnel(tunnel *Tunnel, ch chan interface{}) {
-    self.tunnel = tunnel
-    self.outCh = ch
+    wg sync.WaitGroup
 }
 
 func (self *Coor) Start() error {
@@ -49,15 +42,16 @@ func (self *Coor) Wait() {
     self.wg.Wait()
 }
 
-func (self *Coor) AddLink(ch chan[]byte) uint16 {
-    if self.tunnel == nil {
-        return 0
-    }
-    return self.linkset.Set(ch)
+func (self *Coor) SendLinkCreate(linkid uint16) {
+    self.Send(LINK_CREATE, linkid, nil)
 }
 
-func (self *Coor) RemLink(linkid uint16) {
-    self.linkset.Clear(linkid)
+func (self *Coor) SendLinkDestory(linkid uint16) {
+    self.Send(LINK_DESTROY, linkid, nil)
+}
+
+func (self *Coor) SendLinkData(linkid uint16, data []byte) {
+    self.Send(LINK_DATA, linkid, data)
 }
 
 func (self *Coor) Send(cmd uint8, linkid uint16, data []byte) {
@@ -68,29 +62,17 @@ func (self *Coor) Send(cmd uint8, linkid uint16, data []byte) {
             payload.Data = data
         case LINK_CREATE, LINK_DESTROY:
             buf := new(bytes.Buffer)
-            var body CmdBody
+            var body CmdPayload
             body.Cmd = cmd
             body.Linkid = linkid
             binary.Write(buf, binary.LittleEndian, &body)
 
             payload.Linkid = 0
             payload.Data   = buf.Bytes()
+        default:
+            logger.Printf("unknown cmd:%d, linkid:%d", cmd, linkid)
     }
     self.tunnel.Put(&payload)
-}
-
-func (self *Coor) OnCmd(body *CmdBody) error {
-    switch body.Cmd {
-        case LINK_CREATE:
-        case LINK_DESTROY:
-            ch := self.linkset.Get(body.Linkid)
-            if ch != nil {
-                close(ch)
-            }
-        default:
-            logger.Printf("receive unknown cmd:%v", body)
-    }
-    return nil
 }
 
 func (self *Coor) Dispatch() {
@@ -103,33 +85,24 @@ func (self *Coor) Dispatch() {
         }
 
         if payload.Linkid == 0 {
-            var body CmdBody
+            var cmd CmdPayload
             buf := bytes.NewBuffer(payload.Data)
-            err := binary.Read(buf, binary.LittleEndian, &body)
+            err := binary.Read(buf, binary.LittleEndian, &cmd)
             if err != nil {
                 logger.Printf("parse message failed:%s, break dispatch", err.Error())
                 break
             }
-            
-            err = self.OnCmd(&body)
-            if err != nil {
-                logger.Printf("deal cmd failed:%s, break dispatch", err.Error())
-                break
-            }
+            self.outCh <- cmd
         } else {
-            ch := self.linkset.Get(payload.Linkid)
-            if ch == nil {
-                logger.Printf("unknown linkid:%d, drop message", payload.Linkid)
-            } else {
-                ch <- payload.Data
-            }
+            self.outCh <- payload
         }
     }
 }
 
-func NewCoor(gate bool, capacity uint16) *Coor {
-    linkset := NewLinkSet(capacity)
-    var wg sync.WaitGroup
-    return &Coor{gate, nil, linkset, wg, nil}
+func NewCoor(tunnel *Tunnel, ch chan interface{}) *Coor {
+    coor := new(Coor)
+    coor.tunnel = tunnel
+    coor.outCh = ch
+    return coor
 }
 

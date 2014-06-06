@@ -6,60 +6,59 @@
 package main
 
 import (
-    "net"
-    "sync"
+	"net"
+	"sync"
 )
 
 type BackServer struct {
-    TcpServer
-    wg sync.WaitGroup
+	TcpServer
+	wg sync.WaitGroup
 }
 
 func (self *BackServer) Start() error {
-    err := self.buildListener()
-    if err != nil {
-        return err
-    }
+	err := self.buildListener()
+	if err != nil {
+		return err
+	}
 
-    self.wg.Add(1)
-    go func() {
-        defer self.wg.Done()
-        conn, err := self.accept()
-        if err != nil {
-            return
-        }
-        self.closeListener()
-        self.handleClient(conn)
-    }()
-    return nil
+	self.wg.Add(1)
+	go func() {
+		defer self.wg.Done()
+		conn, err := self.accept()
+		if err != nil {
+			return
+		}
+		self.closeListener()
+		self.handleClient(conn)
+	}()
+	return nil
 }
 
 func (self *BackServer) handleClient(conn *net.TCPConn) {
-    defer self.wg.Done()
-    defer conn.Close()
+	defer self.wg.Done()
+	defer conn.Close()
 
-    logger.Printf("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
-    tunnel := NewTunnel(conn)
-    frontDoor := NewFrontServer(tunnel)
-    err := frontDoor.Start()
-    if err != nil {
-        logger.Printf("frontDoor start failed:%s", err.Error())
-        return
-    }
-    frontDoor.Wait()
+	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
+	tunnel := NewTunnel(conn)
+	frontDoor := NewFrontServer(tunnel)
+	err := frontDoor.Start()
+	if err != nil {
+		Error("frontDoor start failed:%s", err.Error())
+		return
+	}
+	frontDoor.Wait()
 }
 
 func (self *BackServer) Stop() {
-    self.closeListener()
+	self.closeListener()
 }
 
 func (self *BackServer) Wait() {
-    self.wg.Wait()
+	self.wg.Wait()
 }
 
 func NewBackServer() *BackServer {
-    backDoor := new(BackServer)
-    backDoor.TcpServer.addr = options.backAddr
-    return backDoor
+	backDoor := new(BackServer)
+	backDoor.TcpServer.addr = options.backAddr
+	return backDoor
 }
-

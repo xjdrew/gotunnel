@@ -1,7 +1,12 @@
+//
+//   date  : 2014-06-06
+//   author: xjdrew
+//
+
 package main
 import (
     "encoding/json"
-    "io"
+    "math/rand"
     "net"
     "os"
     "sync"
@@ -16,7 +21,7 @@ type Host struct {
 
 type Upstream struct {
     Hosts []Host
-    weight int 
+    weight int
 }
 
 type BackClient struct {
@@ -26,7 +31,7 @@ type BackClient struct {
     upstream *Upstream
     linkset *LinkSet
     coor *Coor
-    ch chan interface{}
+    tunnelCh chan interface{}
 }
 
 func (self *BackClient) readSettings() (upstream *Upstream, err error) {
@@ -36,13 +41,13 @@ func (self *BackClient) readSettings() (upstream *Upstream, err error) {
         return
     }
     defer fp.Close()
-    
+
     upstream = new(Upstream)
     dec := json.NewDecoder(fp)
     err = dec.Decode(upstream)
     if err != nil {
         logger.Printf("decode config file failed:%s", err.Error())
-        return 
+        return
     }
 
     for i := range upstream.Hosts {
@@ -56,21 +61,21 @@ func (self *BackClient) readSettings() (upstream *Upstream, err error) {
     }
 
     logger.Printf("config:%v", upstream)
-    return 
+    return
 }
 
-func (self *BackClient) chooseHost() host *Host {
+func (self *BackClient) chooseHost() (host *Host) {
     upstream := self.upstream
     if upstream.weight <= 0 {
         return
     }
-    v := rank.Intn(upstream.weight)
-    for _, host := range upstream.Hosts {
-        if host.Weight >= v {
-            host = &host
+    v := rand.Intn(upstream.weight)
+    for _, h := range upstream.Hosts {
+        if h.Weight >= v {
+            host = &h
             break
         }
-        v -= host.Weight
+        v -= h.Weight
     }
     return
 }
@@ -95,17 +100,9 @@ func (self *BackClient) handleLink(linkid uint16, ch chan[]byte) {
     }
 
     link := NewLink(linkid, dest)
-
-    self.wg.Add(1)
-    go func() {
-        defer self.wg.Done()
-        link.Upload(self.coor)
-    }
-
-    err = link.Download(ch)
+    err = link.Pump(self.coor, ch)
     if err != nil {
         self.linkset.Reset(linkid)
-        self.coor.SendLinkDestory(linkid)
     }
 }
 
@@ -113,13 +110,14 @@ func (self *BackClient) ctrl(cmd *CmdPayload) {
     linkid := cmd.Linkid
     switch cmd.Cmd {
         case LINK_CREATE:
-            ch = make(chan[]byte, 256)
+            ch := make(chan[]byte, 256)
             err := self.linkset.Set(linkid, ch)
             if err != nil {
                 logger.Printf("build link failed, linkid:%d, error:%s", linkid, err)
                 self.coor.SendLinkDestory(linkid)
                 return
             }
+            logger.Printf("new link:%d", linkid)
             self.wg.Add(1)
             go self.handleLink(linkid, ch)
         case LINK_DESTROY:
@@ -139,7 +137,7 @@ func (self *BackClient) ctrl(cmd *CmdPayload) {
 
 func (self *BackClient) data(payload *TunnelPayload) {
     linkid := payload.Linkid
-    ch, err := self.LinkSet.Get(linkid)
+    ch, err := self.linkset.Get(linkid)
     if err != nil {
         logger.Printf("illegal link, linkid:%d", linkid)
         return
@@ -147,26 +145,26 @@ func (self *BackClient) data(payload *TunnelPayload) {
 
     if ch != nil {
         ch <- payload.Data
-    else {
+    } else {
         logger.Printf("drop data becase no link, linkid:%d", linkid)
     }
 }
 
-func (self *BackClient) Dispatch() {
+func (self *BackClient) dispatch() {
     defer self.wg.Done()
-    for data := range self.ch {
-        switch payload := data.(type) {
-            case CmdPayload:
-                self.ctrl(&payload)
-            case TunnelPayload:
+    for payload := range self.tunnelCh {
+        switch payload := payload.(type) {
+            case *CmdPayload:
+                self.ctrl(payload)
+            case *TunnelPayload:
                 self.data(payload)
             default:
-                logger.Printf("unknown payload:%v", payload)
+                logger.Printf("unknown payload type:%T", payload)
         }
     }
 }
 
-func (self *BackClient) Pump() {
+func (self *BackClient) pump() {
     defer self.wg.Done()
     self.coor.Start()
     self.coor.Wait()
@@ -178,7 +176,7 @@ func (self *BackClient) Start() error {
         return err
     }
     self.upstream = upstream
-    
+
     addr, err := net.ResolveTCPAddr("tcp", self.backAddr)
     if err != nil {
         return err
@@ -188,13 +186,13 @@ func (self *BackClient) Start() error {
         return err
     }
 
-    self.ch := make(chan interface{}, 65535)
-    self.coor := NewCoor(NewTunnel(conn), ch)
+    self.tunnelCh = make(chan interface{}, 65535)
+    self.coor = NewCoor(NewTunnel(conn), self.tunnelCh)
 
     self.wg.Add(1)
-    go self.Pump()
+    go self.pump()
     self.wg.Add(1)
-    go self.Dispatch()
+    go self.dispatch()
     return nil
 }
 
@@ -205,11 +203,11 @@ func (self *BackClient) Wait() {
     self.wg.Wait()
 }
 
-func NewBackClient(configFile string, backAddr string, capacity uint16) *BackClient {
+func NewBackClient() *BackClient {
     backClient := new(BackClient)
-    backClient.configFile = configFile
-    backClient.backAddr = backAddr
-    backClient.linkset = NewLinkSet(capacity)
+    backClient.configFile = options.configFile
+    backClient.backAddr = options.backAddr
+    backClient.linkset = NewLinkSet(options.capacity)
     return backClient
 }
 

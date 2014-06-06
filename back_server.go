@@ -11,8 +11,7 @@ import (
 )
 
 type BackServer struct {
-    *TcpServer
-    coor *Coor
+    TcpServer
     wg sync.WaitGroup
 }
 
@@ -21,7 +20,7 @@ func (self *BackServer) Start() error {
     if err != nil {
         return err
     }
-    
+
     self.wg.Add(1)
     go func() {
         defer self.wg.Done()
@@ -40,20 +39,14 @@ func (self *BackServer) handleClient(conn *net.TCPConn) {
     defer conn.Close()
 
     logger.Printf("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
-    ch := make(chan interface{}, 65535)
-    self.wg.Add(1)
-    go func() {
-        defer self.wg.Done()
-
-        tunnel := NewTunnel(conn)
-        self.coor.SetTunnel(tunnel, ch)
-        self.coor.Start()
-        self.coor.Wait()
-    }()
-
-    for payload := range ch {
-        logger.Printf("payload:%v", payload)
+    tunnel := NewTunnel(conn)
+    frontDoor := NewFrontServer(tunnel)
+    err := frontDoor.Start()
+    if err != nil {
+        logger.Printf("frontDoor start failed:%s", err.Error())
+        return
     }
+    frontDoor.Wait()
 }
 
 func (self *BackServer) Stop() {
@@ -64,8 +57,9 @@ func (self *BackServer) Wait() {
     self.wg.Wait()
 }
 
-func NewBackServer(addr string, coor *Coor) *BackServer {
-    var wg sync.WaitGroup
-    return &BackServer{NewTcpServer(addr), coor, wg}
+func NewBackServer() *BackServer {
+    backDoor := new(BackServer)
+    backDoor.TcpServer.addr = options.backAddr
+    return backDoor
 }
 

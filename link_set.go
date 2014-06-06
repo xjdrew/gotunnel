@@ -29,14 +29,14 @@ func (self *LinkSet) isValidLinkid(linkid uint16) bool {
 func (self *LinkSet) AcquireId() uint16 {
     var linkid uint16 = 0
     select {
-        case linkid = <- self.freeLinkid:
+        case linkid = <-self.freeLinkid:
         default:
             logger.Printf("allocate linkid failed")
     }
     return linkid
 }
 
-func (self *LinkSet) ReleaseId(linkid uint16) err error {
+func (self *LinkSet) ReleaseId(linkid uint16) (err error) {
     if !self.isValidLinkid(linkid) {
         err = IndexError
         return
@@ -45,10 +45,10 @@ func (self *LinkSet) ReleaseId(linkid uint16) err error {
     return
 }
 
-func (self *LinkSet) Set(linkid uint16, ch chan []byte) err error {
+func (self *LinkSet) Set(linkid uint16, ch chan []byte) (err error) {
     if !self.isValidLinkid(linkid) {
         err = IndexError
-        return 
+        return
     }
 
     self.rw.Lock()

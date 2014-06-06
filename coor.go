@@ -13,8 +13,8 @@ import (
 
 const (
     LINK_DATA     uint8  = iota
-    LINK_CREATE  
-    LINK_DESTROY 
+    LINK_CREATE
+    LINK_DESTROY
 )
 
 type CmdPayload struct {
@@ -34,7 +34,7 @@ func (self *Coor) Start() error {
     self.wg.Add(1)
     go self.tunnel.PumpUp(&self.wg)
     self.wg.Add(1)
-    go self.Dispatch() 
+    go self.dispatch()
     return nil
 }
 
@@ -75,7 +75,7 @@ func (self *Coor) Send(cmd uint8, linkid uint16, data []byte) {
     self.tunnel.Put(&payload)
 }
 
-func (self *Coor) Dispatch() {
+func (self *Coor) dispatch() {
     defer self.wg.Done()
     for {
         payload := self.tunnel.Pop()
@@ -92,7 +92,7 @@ func (self *Coor) Dispatch() {
                 logger.Printf("parse message failed:%s, break dispatch", err.Error())
                 break
             }
-            self.outCh <- cmd
+            self.outCh <- &cmd
         } else {
             self.outCh <- payload
         }

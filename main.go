@@ -16,6 +16,8 @@ import (
     "os/signal"
     "sync"
     "syscall"
+    "math/rand"
+    "time"
 )
 
 var logger *log.Logger
@@ -23,7 +25,7 @@ func init() {
     // var err error
     //logger, err = syslog.NewLogger(syslog.LOG_LOCAL0, 0)
     logger = log.New(io.Writer(os.Stderr), "", 0)
-    
+
     /*
     if err != nil {
         fmt.Printf("create logger failed:%s", err.Error())
@@ -31,6 +33,7 @@ func init() {
     }
     */
     logger.Println("gotunnel run!")
+    rand.Seed(time.Now().Unix())
 }
 
 type Service interface {
@@ -130,14 +133,11 @@ func main() {
     options.capacity = 65535
 
     app := new(App)
-    coor := NewCoor(options.gate, uint16(options.capacity))
     if options.gate {
-        frontDoor := NewFrontServer(options.frontAddr, coor)
-        backDoor  := NewBackServer(options.backAddr, coor)
-        app.Add(frontDoor)
+        backDoor := NewBackServer()
         app.Add(backDoor)
     } else {
-        backClient := NewBackClient(options.configFile, options.backAddr, coor)
+        backClient := NewBackClient()
         app.Add(backClient)
     }
 

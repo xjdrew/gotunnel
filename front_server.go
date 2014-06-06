@@ -11,9 +11,66 @@ import (
 )
 
 type FrontServer struct {
-    *TcpServer
-    coor *Coor
+    TcpServer
+    tunnel *Tunnel
+    linkset *LinkSet
+
     wg sync.WaitGroup
+    coor *Coor
+    tunnelCh chan interface{}
+}
+
+func (self *FrontServer) pump() {
+    defer self.wg.Done()
+    self.coor.Start()
+    self.coor.Wait()
+}
+
+func (self *FrontServer) ctrl(cmd *CmdPayload) {
+    linkid := cmd.Linkid
+    switch cmd.Cmd {
+        case LINK_DESTROY:
+            ch, err := self.linkset.Reset(linkid)
+            if err != nil {
+                logger.Printf("close link failed, linkid:%d, error:%s", linkid, err)
+                return
+            }
+            // close ch, don't write to ch again
+            if ch != nil {
+                close(ch)
+            }
+        default:
+            logger.Printf("receive unknown cmd:%v", cmd)
+    }
+}
+
+func (self *FrontServer) data(payload *TunnelPayload) {
+    linkid := payload.Linkid
+    ch, err := self.linkset.Get(linkid)
+    if err != nil {
+        logger.Printf("illegal link, linkid:%d", linkid)
+        return
+    }
+
+    if ch != nil {
+        ch <- payload.Data
+    } else {
+        logger.Printf("drop data becase no link, linkid:%d", linkid)
+    }
+}
+
+func (self *FrontServer) dispatch() {
+    defer self.wg.Done()
+    for payload := range self.tunnelCh {
+        switch payload := payload.(type) {
+            case *CmdPayload:
+                self.ctrl(payload)
+            case *TunnelPayload:
+                self.data(payload)
+            default:
+                logger.Printf("unknown payload type:%T", payload)
+        }
+    }
 }
 
 func (self *FrontServer) Start() error {
@@ -21,7 +78,7 @@ func (self *FrontServer) Start() error {
     if err != nil {
         return err
     }
-    
+
     self.wg.Add(1)
     go func() {
         defer self.wg.Done()
@@ -34,6 +91,14 @@ func (self *FrontServer) Start() error {
             go self.handleClient(conn)
         }
     }()
+
+    self.tunnelCh = make(chan interface{}, 65535)
+    self.coor = NewCoor(self.tunnel, self.tunnelCh)
+
+    self.wg.Add(1)
+    go self.pump()
+    self.wg.Add(1)
+    go self.dispatch()
     return nil
 }
 
@@ -59,19 +124,12 @@ func (self *FrontServer) handleClient(conn *net.TCPConn) {
     logger.Printf("new link:%d, source: %v", linkid, conn.RemoteAddr())
     defer self.linkset.ReleaseId(linkid)
 
-    link := NewLink(linkid, conn)
     self.coor.SendLinkCreate(linkid)
 
-    self.wg.Add(1)
-    go func() {
-        defer self.wg.Done()
-        link.Upload(self.coor)
-    }
-
-    err = link.Download(ch)
+    link := NewLink(linkid, conn)
+    err = link.Pump(self.coor, ch)
     if err != nil {
         self.linkset.Reset(linkid)
-        self.coor.SendLinkDestory(linkid)
     }
 }
 
@@ -83,11 +141,11 @@ func (self *FrontServer) Wait() {
     self.wg.Wait()
 }
 
-func NewFrontServer(addr string, coor *Coor, capacity uint16) *FrontServer {
+func NewFrontServer(tunnel *Tunnel) *FrontServer {
     frontServer := new(FrontServer)
-    frontServer.TcpServer.addr = addr
-    frontServer.coor = coor
-    frontServer.linkset = NewLinkSet(capacity)
+    frontServer.tunnel = tunnel
+    frontServer.TcpServer.addr = options.frontAddr
+    frontServer.linkset = NewLinkSet(options.capacity)
     return frontServer
 }
 

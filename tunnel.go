@@ -26,7 +26,7 @@ func (self *Tunnel) Put(payload *TunnelPayload) {
 }
 
 func (self *Tunnel) Pop() *TunnelPayload {
-    payload,ok := <- self.outputCh
+    payload,ok := <-self.outputCh
     if !ok {
         return nil
     }
@@ -47,7 +47,7 @@ func (self *Tunnel) PumpOut(wg *sync.WaitGroup) {
         }
 
         var data []byte
-        
+
         // if header.Sz == 0, it's ok too
         data = make([]byte, header.Sz)
         c := 0
@@ -59,7 +59,7 @@ func (self *Tunnel) PumpOut(wg *sync.WaitGroup) {
             }
             c += n
         }
-        
+
         self.outputCh <- TunnelPayload{header.Linkid, data}
     }
 }
@@ -70,8 +70,8 @@ func (self *Tunnel) PumpUp(wg *sync.WaitGroup) {
 
     var header struct{Linkid uint16; Sz uint8}
     for {
-        payload := <- self.inputCh
-        
+        payload := <-self.inputCh
+
         sz := len(payload.Data)
         if sz > 0xff {
             logger.Panicf("receive malformed payload, linkid:%d, sz:%d", payload.Linkid, sz)
@@ -85,7 +85,7 @@ func (self *Tunnel) PumpUp(wg *sync.WaitGroup) {
             logger.Printf("write tunnel failed:%s", err.Error())
             break
         }
-        
+
         c := 0
         for c < sz {
             n, err := self.conn.Write(payload.Data[c:])

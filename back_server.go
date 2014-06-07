@@ -15,6 +15,19 @@ type BackServer struct {
 	wg sync.WaitGroup
 }
 
+func (self *BackServer) listen() {
+	defer self.wg.Done()
+
+	for {
+		conn, err := self.accept()
+		if err != nil {
+			Error("back server acceept failed:%s", err.Error())
+			return
+		}
+		self.handleClient(conn)
+	}
+}
+
 func (self *BackServer) Start() error {
 	err := self.buildListener()
 	if err != nil {
@@ -22,20 +35,11 @@ func (self *BackServer) Start() error {
 	}
 
 	self.wg.Add(1)
-	go func() {
-		defer self.wg.Done()
-		conn, err := self.accept()
-		if err != nil {
-			return
-		}
-		self.closeListener()
-		self.handleClient(conn)
-	}()
+	go self.listen()
 	return nil
 }
 
 func (self *BackServer) handleClient(conn *net.TCPConn) {
-	defer self.wg.Done()
 	defer conn.Close()
 
 	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
@@ -55,6 +59,7 @@ func (self *BackServer) Stop() {
 
 func (self *BackServer) Wait() {
 	self.wg.Wait()
+	Error("back door quit")
 }
 
 func NewBackServer() *BackServer {

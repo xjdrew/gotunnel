@@ -20,6 +20,20 @@ func (self *FrontServer) pump() {
 	defer self.wg.Done()
 	self.coor.Start()
 	self.coor.Wait()
+	self.closeListener()
+}
+
+func (self *FrontServer) listen() {
+	defer self.wg.Done()
+	for {
+		conn, err := self.accept()
+		if err != nil {
+			Error("front server acceept failed:%s", err.Error())
+			break
+		}
+		self.wg.Add(1)
+		go self.handleClient(conn)
+	}
 }
 
 func (self *FrontServer) Start() error {
@@ -29,20 +43,10 @@ func (self *FrontServer) Start() error {
 	}
 
 	self.wg.Add(1)
-	go func() {
-		defer self.wg.Done()
-		for {
-			conn, err := self.accept()
-			if err != nil {
-				break
-			}
-			self.wg.Add(1)
-			go self.handleClient(conn)
-		}
-	}()
-
+	go self.listen()
 	self.wg.Add(1)
 	go self.pump()
+
 	return nil
 }
 
@@ -83,6 +87,7 @@ func (self *FrontServer) Stop() {
 
 func (self *FrontServer) Wait() {
 	self.wg.Wait()
+	Error("front door quit")
 }
 
 func NewFrontServer(tunnel *Tunnel) *FrontServer {

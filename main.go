@@ -8,9 +8,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io"
 
-	"log"
 	// "log/syslog"
 	"math/rand"
 	"os"
@@ -20,20 +18,7 @@ import (
 	"time"
 )
 
-var logger *log.Logger
-
 func init() {
-	// var err error
-	//logger, err = syslog.NewLogger(syslog.LOG_LOCAL0, 0)
-	logger = log.New(io.Writer(os.Stderr), "", 0)
-
-	/*
-	   if err != nil {
-	       fmt.Printf("create logger failed:%s", err.Error())
-	       os.Exit(1)
-	   }
-	*/
-	logger.Println("gotunnel run!")
 	rand.Seed(time.Now().Unix())
 }
 
@@ -106,6 +91,7 @@ type Options struct {
 	frontAddr  string
 	backAddr   string
 	configFile string
+	logLevel   int
 }
 
 var options Options
@@ -120,6 +106,7 @@ func main() {
 	flag.BoolVar(&options.gate, "gate", false, "as gate or node")
 	flag.StringVar(&options.frontAddr, "front_addr", "0.0.0.0:8001", "front door address(0.0.0.0:8001)")
 	flag.StringVar(&options.backAddr, "back_addr", "0.0.0.0:8002", "back door address(0.0.0.0:8002)")
+	flag.IntVar(&options.logLevel, "log", 1, "larger value for detail log")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -145,7 +132,8 @@ func main() {
 
 	err := app.Start()
 	if err != nil {
-		Panic("start gotunnel failed:%s", err.Error())
+		Error("start gotunnel failed:%s", err.Error())
+		return
 	}
 	go handleSignal(app)
 

@@ -8,7 +8,6 @@ package main
 import (
 	"encoding/binary"
 	"net"
-	"sync"
 )
 
 type TunnelPayload struct {
@@ -35,19 +34,18 @@ func (self *Tunnel) Pop() *TunnelPayload {
 }
 
 // read
-func (self *Tunnel) PumpOut(wg *sync.WaitGroup) {
-	defer wg.Done()
+func (self *Tunnel) PumpOut() (err error) {
+	defer close(self.outputCh)
 
 	var header struct {
 		Linkid uint16
 		Sz     uint8
 	}
 	for {
-		err := binary.Read(self.conn, binary.LittleEndian, &header)
+		err = binary.Read(self.conn, binary.LittleEndian, &header)
 		if err != nil {
 			Error("read tunnel failed:%s", err.Error())
-			close(self.outputCh)
-			break
+			return
 		}
 
 		var data []byte
@@ -56,22 +54,22 @@ func (self *Tunnel) PumpOut(wg *sync.WaitGroup) {
 		data = make([]byte, header.Sz)
 		c := 0
 		for c < int(header.Sz) {
-			n, err := self.conn.Read(data[c:])
+			var n int
+			n, err = self.conn.Read(data[c:])
 			if err != nil {
 				Error("read tunnel failed:%s", err.Error())
-				break
+				return
 			}
 			c += n
 		}
 
 		self.outputCh <- TunnelPayload{header.Linkid, data}
 	}
+	return
 }
 
 // write
-func (self *Tunnel) PumpUp(wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func (self *Tunnel) PumpUp() (err error) {
 	var header struct {
 		Linkid uint16
 		Sz     uint8
@@ -87,22 +85,24 @@ func (self *Tunnel) PumpUp(wg *sync.WaitGroup) {
 
 		header.Linkid = payload.Linkid
 		header.Sz = uint8(sz)
-		err := binary.Write(self.conn, binary.LittleEndian, &header)
+		err = binary.Write(self.conn, binary.LittleEndian, &header)
 		if err != nil {
 			Error("write tunnel failed:%s", err.Error())
-			break
+			return
 		}
 
 		c := 0
 		for c < sz {
-			n, err := self.conn.Write(payload.Data[c:])
+			var n int
+			n, err = self.conn.Write(payload.Data[c:])
 			if err != nil {
 				Error("write tunnel failed:%s", err.Error())
-				break
+				return
 			}
 			c += n
 		}
 	}
+	return
 }
 
 func NewTunnel(conn *net.TCPConn) *Tunnel {

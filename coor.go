@@ -33,20 +33,6 @@ type Coor struct {
 	wg     sync.WaitGroup
 }
 
-func (self *Coor) Start() error {
-	self.wg.Add(1)
-	go self.tunnel.PumpOut(&self.wg)
-	self.wg.Add(1)
-	go self.tunnel.PumpUp(&self.wg)
-	self.wg.Add(1)
-	go self.dispatch()
-	return nil
-}
-
-func (self *Coor) Wait() {
-	self.wg.Wait()
-}
-
 func (self *Coor) SendLinkCreate(linkid uint16) {
 	self.Send(LINK_CREATE, linkid, nil)
 }
@@ -91,18 +77,17 @@ func (self *Coor) ctrl(cmd *CmdPayload) {
 	if self.door != nil && self.door.ctrl(cmd) {
 		return
 	}
+
 	switch cmd.Cmd {
 	case LINK_DESTROY:
 		ch, err := self.Reset(linkid)
-		if err != nil {
-			Error("close link failed, linkid:%d, error:%s", linkid, err)
+		if err != nil || ch == nil {
+			Error("link(%d) close failed, error:%s", linkid, err)
 			return
 		}
-		Info("close link:%d", linkid)
 		// close ch, don't write to ch again
-		if ch != nil {
-			close(ch)
-		}
+		close(ch)
+		Info("link(%d) closed", linkid)
 	default:
 		Error("receive unknown cmd:%v", cmd)
 	}
@@ -145,6 +130,41 @@ func (self *Coor) dispatch() {
 			self.ctrl(&cmd)
 		} else {
 			self.data(payload)
+		}
+	}
+}
+
+func (self *Coor) pumpOut() {
+	self.wg.Done()
+	self.tunnel.PumpOut()
+}
+
+func (self *Coor) pumpUp() {
+	self.wg.Done()
+	self.tunnel.PumpUp()
+}
+
+func (self *Coor) Start() error {
+	self.wg.Add(1)
+	go self.pumpOut()
+	self.wg.Add(1)
+	go self.pumpUp()
+	self.wg.Add(1)
+	go self.dispatch()
+	return nil
+}
+
+func (self *Coor) Wait() {
+	self.wg.Wait()
+	Error("coor quit")
+	// tunnel disconnect, so reset all link
+	Info("reset all link")
+	var i uint16 = 1
+	for ; i < options.capacity; i++ {
+		ch, _ := self.Reset(i)
+		if ch != nil {
+			close(ch)
+			Info("link(%d) closed", i)
 		}
 	}
 }

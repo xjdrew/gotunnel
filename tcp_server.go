@@ -18,9 +18,6 @@ type TcpServer struct {
 
 func (self *TcpServer) accept() (conn *net.TCPConn, err error) {
 	conn, err = self.ln.AcceptTCP()
-	if err != nil {
-		Error("accept failed:%s", err.Error())
-	}
 	return
 }
 

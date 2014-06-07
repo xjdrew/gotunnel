@@ -5,23 +5,42 @@
 
 package main
 
-func _print(level string, format string, a ...interface{}) {
-	logger.Printf(level+format, a...)
+import (
+	"io"
+	"log"
+	"os"
+)
+
+var logger *log.Logger
+
+func init() {
+	//logger = log.New(io.Writer(os.Stderr), "", log.Ldate | log.Lmicroseconds | log.Lshortfile)
+	logger = log.New(io.Writer(os.Stderr), "", log.Ldate|log.Lmicroseconds)
+}
+
+func _print(format string, a ...interface{}) {
+	logger.Printf(format, a...)
 }
 
 func Debug(format string, a ...interface{}) {
-	_print("<debug>", format, a...)
+	if options.logLevel > 2 {
+		_print(format, a...)
+	}
 }
 
 func Info(format string, a ...interface{}) {
-	_print("<info>", format, a...)
+	if options.logLevel > 1 {
+		_print(format, a...)
+	}
 }
 
 func Error(format string, a ...interface{}) {
-	_print("<error>", format, a...)
+	if options.logLevel > 0 {
+		_print(format, a...)
+	}
 }
 
 func Panic(format string, a ...interface{}) {
-	_print("<panic>", format, a...)
-  panic("!!")
+	_print(format, a...)
+	panic("!!")
 }

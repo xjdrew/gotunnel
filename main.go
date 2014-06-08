@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 
@@ -92,6 +93,7 @@ type Options struct {
 	backAddr   string
 	configFile string
 	logLevel   int
+	tgw        []byte
 }
 
 var options Options
@@ -103,13 +105,16 @@ func usage() {
 }
 
 func main() {
+	var tgw string
 	flag.BoolVar(&options.gate, "gate", false, "as gate or node")
+	flag.StringVar(&tgw, "tgw", "", "tgw header")
 	flag.StringVar(&options.frontAddr, "front_addr", "0.0.0.0:8001", "front door address(0.0.0.0:8001)")
 	flag.StringVar(&options.backAddr, "back_addr", "0.0.0.0:8002", "back door address(0.0.0.0:8002)")
 	flag.IntVar(&options.logLevel, "log", 1, "larger value for detail log")
 	flag.Usage = usage
 	flag.Parse()
 
+	options.tgw = bytes.ToLower([]byte(tgw))
 	if !options.gate {
 		args := flag.Args()
 		if len(args) < 1 {

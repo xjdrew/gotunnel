@@ -147,6 +147,12 @@ func (self *BackClient) Start() error {
 		return err
 	}
 
+	err = writeTGW(conn)
+	if err != nil {
+		Error("write tgw failed")
+		return err
+	}
+
 	self.coor = NewCoor(NewTunnel(conn), self)
 
 	self.wg.Add(1)

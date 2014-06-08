@@ -31,6 +31,7 @@ func (self *FrontServer) listen() {
 			Error("front server acceept failed:%s", err.Error())
 			break
 		}
+		Debug("front server, new connection from %v", conn.RemoteAddr())
 		self.wg.Add(1)
 		go self.handleClient(conn)
 	}
@@ -53,6 +54,14 @@ func (self *FrontServer) Start() error {
 func (self *FrontServer) handleClient(conn *net.TCPConn) {
 	defer self.wg.Done()
 
+	// try skip tgw
+	err := skipTGW(conn)
+	if err != nil {
+		Error("skip tgw failed, source: %v", conn.RemoteAddr())
+		conn.Close()
+		return
+	}
+
 	linkid := self.coor.AcquireId()
 	if linkid == 0 {
 		Error("alloc linkid failed, source: %v", conn.RemoteAddr())
@@ -61,7 +70,7 @@ func (self *FrontServer) handleClient(conn *net.TCPConn) {
 	}
 
 	ch := make(chan []byte, 256)
-	err := self.coor.Set(linkid, ch)
+	err = self.coor.Set(linkid, ch)
 	if err != nil {
 		//impossible
 		conn.Close()

@@ -24,6 +24,7 @@ func (self *BackServer) listen() {
 			Error("back server acceept failed:%s", err.Error())
 			return
 		}
+		Debug("back server, new connection from %v", conn.RemoteAddr())
 		self.handleClient(conn)
 	}
 }
@@ -42,10 +43,17 @@ func (self *BackServer) Start() error {
 func (self *BackServer) handleClient(conn *net.TCPConn) {
 	defer conn.Close()
 
+	// try skip tgw
+	err := skipTGW(conn)
+	if err != nil {
+		Error("skip tgw failed, source: %v", conn.RemoteAddr())
+		return
+	}
+
 	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
 	tunnel := NewTunnel(conn)
 	frontDoor := NewFrontServer(tunnel)
-	err := frontDoor.Start()
+	err = frontDoor.Start()
 	if err != nil {
 		Error("frontDoor start failed:%s", err.Error())
 		return

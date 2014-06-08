@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"net"
 )
 
@@ -11,10 +12,12 @@ type Link struct {
 }
 
 // write data to peer
-func (self *Link) Upload(coor *Coor) error {
+func (self *Link) Upload(coor *Coor) (err error) {
+	rd := bufio.NewReaderSize(self.conn, 4096)
 	for {
 		buffer := make([]byte, 0xff)
-		n, err := self.conn.Read(buffer)
+		var n int
+		n, err = rd.Read(buffer)
 		if err != nil {
 			if self.peerClosed {
 				return nil

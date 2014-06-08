@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/binary"
 	"net"
 )
@@ -41,8 +42,10 @@ func (self *Tunnel) PumpOut() (err error) {
 		Linkid uint16
 		Sz     uint8
 	}
+
+	rd := bufio.NewReaderSize(self.conn, 4096)
 	for {
-		err = binary.Read(self.conn, binary.LittleEndian, &header)
+		err = binary.Read(rd, binary.LittleEndian, &header)
 		if err != nil {
 			Error("read tunnel failed:%s", err.Error())
 			return
@@ -55,7 +58,7 @@ func (self *Tunnel) PumpOut() (err error) {
 		c := 0
 		for c < int(header.Sz) {
 			var n int
-			n, err = self.conn.Read(data[c:])
+			n, err = rd.Read(data[c:])
 			if err != nil {
 				Error("read tunnel failed:%s", err.Error())
 				return

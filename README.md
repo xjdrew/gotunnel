@@ -16,8 +16,11 @@ tunnel <===========================> tunnel
 * coor, link set: 负责管理link
 * link: 抽象的概念，实际连接在tunnel上的映射
 
-## make
+## build
+如果没有搭建过go 的workspace，参考install.sh里面的脚本
+
 go install gotunnel
+
 
 ## run
 

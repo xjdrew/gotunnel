@@ -84,10 +84,7 @@ func (self *FrontServer) handleClient(conn *net.TCPConn) {
 	self.coor.SendLinkCreate(linkid)
 
 	link := NewLink(linkid, conn)
-	err = link.Pump(self.coor, ch)
-	if err != nil {
-		self.coor.Reset(linkid)
-	}
+	link.Pump(self.coor, ch)
 }
 
 func (self *FrontServer) Stop() {

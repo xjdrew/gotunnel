@@ -1,12 +1,20 @@
 ## 原理
-### 数据流
-conn <-> link <-> (link set) <-> coor <-> tunnel ======== tunnel <-> coor <-> (link set) <-> link <-> conn
+### tunnel结构
+conn  <-----------------------------> conn
+
+link  <-----------------------------> link
+
+(link set) <---------------------> (link set)
+
+coor <------------------------------> coor 
+
+tunnel <===========================> tunnel
 
 ### 组件
-*back server, back client: 负责建立tunnel
-*front server: 负责接受玩家连接
-*coor, link set: 负责管理link
-*link: 抽象的概念，实际连接在tunnel上的映射
+* back server, back client: 负责建立tunnel
+* front server: 负责接受玩家连接
+* coor, link set: 负责管理link
+* link: 抽象的概念，实际连接在tunnel上的映射
 
 ## make
 go install gotunnel

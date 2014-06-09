@@ -86,11 +86,11 @@ func (self *Coor) ctrl(cmd *CmdPayload) {
 			return
 		}
 
-        if ch != nil {
-            // close ch, don't write to ch again
-            close(ch)
-            Info("link(%d) closed", linkid)
-        }
+		if ch != nil {
+			// close ch, don't write to ch again
+			close(ch)
+			Info("link(%d) closed", linkid)
+		}
 	default:
 		Error("receive unknown cmd:%v", cmd)
 	}

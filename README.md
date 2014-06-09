@@ -1,6 +1,6 @@
 ## 原理
 ### 数据流
-conn <-> link <-> <link set> <-> coor <-> tunnel =================== tunnel <-> coor <-> (link set) <-> link <-> conn
+conn <-> link <-> (link set) <-> coor <-> tunnel =================== tunnel <-> coor <-> (link set) <-> link <-> conn
 
 ### 组件
 back server, back client: 负责建立tunnel

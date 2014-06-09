@@ -98,6 +98,7 @@ func (self *BackClient) handleLink(linkid uint16, ch chan []byte) {
 		return
 	}
 
+    Info("link(%d) new connection to %v", linkid, dest.RemoteAddr())
 	link := NewLink(linkid, dest)
 	err = link.Pump(self.coor, ch)
 	if err != nil {

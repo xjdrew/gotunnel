@@ -81,13 +81,16 @@ func (self *Coor) ctrl(cmd *CmdPayload) {
 	switch cmd.Cmd {
 	case LINK_DESTROY:
 		ch, err := self.Reset(linkid)
-		if err != nil || ch == nil {
-			Error("link(%d) close failed, error:%s", linkid, err)
+		if err != nil {
+			Error("link(%d) close failed, error:%v", linkid, err)
 			return
 		}
-		// close ch, don't write to ch again
-		close(ch)
-		Info("link(%d) closed", linkid)
+
+        if ch != nil {
+            // close ch, don't write to ch again
+            close(ch)
+            Info("link(%d) closed", linkid)
+        }
 	default:
 		Error("receive unknown cmd:%v", cmd)
 	}

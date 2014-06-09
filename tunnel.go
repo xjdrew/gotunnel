@@ -17,13 +17,13 @@ type TunnelPayload struct {
 }
 
 type Tunnel struct {
-	inputCh  chan TunnelPayload
-	outputCh chan TunnelPayload
+	inputCh  chan *TunnelPayload
+	outputCh chan *TunnelPayload
 	conn     *net.TCPConn
 }
 
 func (self *Tunnel) Put(payload *TunnelPayload) {
-	self.inputCh <- *payload
+	self.inputCh <- payload
 }
 
 func (self *Tunnel) Pop() *TunnelPayload {
@@ -31,7 +31,7 @@ func (self *Tunnel) Pop() *TunnelPayload {
 	if !ok {
 		return nil
 	}
-	return &payload
+	return payload
 }
 
 // read
@@ -66,7 +66,7 @@ func (self *Tunnel) PumpOut() (err error) {
 			c += n
 		}
 
-		self.outputCh <- TunnelPayload{header.Linkid, data}
+		self.outputCh <- &TunnelPayload{header.Linkid, data}
 	}
 	return
 }
@@ -109,5 +109,5 @@ func (self *Tunnel) PumpUp() (err error) {
 }
 
 func NewTunnel(conn *net.TCPConn) *Tunnel {
-	return &Tunnel{make(chan TunnelPayload, 65535), make(chan TunnelPayload, 65535), conn}
+	return &Tunnel{make(chan *TunnelPayload, 65535), make(chan *TunnelPayload, 65535), conn}
 }

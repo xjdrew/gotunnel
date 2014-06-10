@@ -88,7 +88,7 @@ func (self *Coor) ctrl(cmd *CmdPayload) {
 
 		if ch != nil {
 			// close ch, don't write to ch again
-			close(ch)
+			ch <- nil
 			Info("link(%d) closed", linkid)
 		}
 	default:
@@ -166,7 +166,7 @@ func (self *Coor) Wait() {
 	for ; i < options.capacity; i++ {
 		ch, _ := self.Reset(i)
 		if ch != nil {
-			close(ch)
+			ch <- nil
 			Info("link(%d) closed", i)
 		}
 	}

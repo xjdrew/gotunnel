@@ -1,14 +1,12 @@
 ## 原理
-### tunnel结构
-conn  <-----------------------------> conn
+### tunnel stack
 
-link  <-----------------------------> link
-
-(link set) <---------------------> (link set)
-
-coor <------------------------------> coor 
-
-tunnel <===========================> tunnel
+SOURCE   | DESTINATION
+:--------|------------:
+TcpConn  | TCPConn
+Link     |    Link
+Coor     |    Coor
+Tunnel   |  Tunnel
 
 ### 组件
 * back server, back client: 负责建立tunnel

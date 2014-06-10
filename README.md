@@ -42,3 +42,32 @@ nc -lk 1234
 nc 127.0.0.1 8001
 ```
 
+## benchmark
+### 测试环境
+* OS：Ubuntu quantal (12.10)
+* CPU: Intel(R) Core(TM) i5-2400 CPU @ 3.10GHz
+* golang:  go1.2.1 linux/amd64
+
+### gotunnel启动参数
+* gate:./gotunnel -gate
+* node:./gotunnel -back_addr 127.0.0.1:8002 settings.conf
+
+### nginx 作为后端
+* nginx/1.2.1
+* 测试工具使用ab (version 2.3)， 10000次请求
+* 下表对比（Requests per second）
+
+并发数      |    no tunnel  |    go tunnel(CPU=1) | go tunnel(CPU=2)
+:-----------|:--------------|:--------------------|:-------------------
+1           |    7473       |    1902             | 1826
+10          |    21734      |    7508             | 7627
+100         |    20408      |    8681             | 10255
+500         |    18548      |    8000             | 5417
+
+* 并发上去之后，go的效率提升不明显，在100并发数附近结果最好，有点奇怪。
+* 也使用redis-benchmark进行了测试，结果略好一点。
+
+
+
+
+

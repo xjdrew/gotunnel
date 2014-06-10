@@ -78,7 +78,7 @@ func (self *FrontServer) handleClient(conn *net.TCPConn) {
 		return
 	}
 
-	Info("new link:%d, source: %v", linkid, conn.RemoteAddr())
+	Info("link(%d) create link, source: %v", linkid, conn.RemoteAddr())
 	defer self.coor.ReleaseId(linkid)
 
 	self.coor.SendLinkCreate(linkid)

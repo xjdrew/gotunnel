@@ -46,7 +46,7 @@ func (self *Coor) SendLinkData(linkid uint16, data []byte) {
 }
 
 func (self *Coor) Send(cmd uint8, linkid uint16, data []byte) {
-	var payload TunnelPayload
+	payload := new(TunnelPayload)
 	switch cmd {
 	case LINK_DATA:
 		Debug("link(%d) send data:%d", linkid, len(data))
@@ -67,7 +67,7 @@ func (self *Coor) Send(cmd uint8, linkid uint16, data []byte) {
 	default:
 		Error("unknown cmd:%d, linkid:%d", cmd, linkid)
 	}
-	self.tunnel.Put(&payload)
+	self.tunnel.Put(payload)
 }
 
 func (self *Coor) ctrl(cmd *CmdPayload) {
@@ -102,14 +102,14 @@ func (self *Coor) data(payload *TunnelPayload) {
 
 	ch, err := self.Get(linkid)
 	if err != nil {
-		Error("illegal link, linkid:%d", linkid)
+		Error("link(%d) illegal link", linkid)
 		return
 	}
 
 	if ch != nil {
 		ch <- payload.Data
 	} else {
-		Info("drop data because no link, linkid:%d", linkid)
+		Info("link(%d) drop data:%d", linkid, len(payload.Data))
 	}
 }
 
@@ -123,14 +123,14 @@ func (self *Coor) dispatch() {
 		}
 
 		if payload.Linkid == 0 {
-			var cmd CmdPayload
+			cmd := new(CmdPayload)
 			buf := bytes.NewBuffer(payload.Data)
-			err := binary.Read(buf, binary.LittleEndian, &cmd)
+			err := binary.Read(buf, binary.LittleEndian, cmd)
 			if err != nil {
 				Error("parse message failed:%s, break dispatch", err.Error())
 				break
 			}
-			self.ctrl(&cmd)
+			self.ctrl(cmd)
 		} else {
 			self.data(payload)
 		}

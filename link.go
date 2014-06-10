@@ -70,6 +70,7 @@ func (self *Link) Pump(coor *Coor, ch chan []byte) {
 	if self.err != ErrPeerClosed {
 		coor.Reset(self.id)
 		coor.SendLinkDestory(self.id)
+		Info("link(%d) closing: %v", self.id, self.err)
 	}
 }
 

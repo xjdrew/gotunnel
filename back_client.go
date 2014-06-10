@@ -84,7 +84,7 @@ func (self *BackClient) handleLink(linkid uint16, ch chan []byte) {
 
 	host := self.chooseHost()
 	if host == nil {
-		Error("choose host failed, linkid:%d", linkid)
+		Error("link(%d) choose host failed", linkid)
 		self.coor.Reset(linkid)
 		self.coor.SendLinkDestory(linkid)
 		return
@@ -92,7 +92,7 @@ func (self *BackClient) handleLink(linkid uint16, ch chan []byte) {
 
 	dest, err := net.DialTCP("tcp", nil, host.addr)
 	if err != nil {
-		Error("connect to host failed, linkid:%d, host:%s, err:%v", linkid, host.Addr, err)
+		Error("link(%d) connect to host failed, host:%s, err:%v", linkid, host.Addr, err)
 		self.coor.Reset(linkid)
 		self.coor.SendLinkDestory(linkid)
 		return
@@ -114,7 +114,7 @@ func (self *BackClient) ctrl(cmd *CmdPayload) bool {
 			self.coor.SendLinkDestory(linkid)
 			return true
 		}
-		Info("new link:%d", linkid)
+		Info("link(%d) build link", linkid)
 		self.wg.Add(1)
 		go self.handleLink(linkid, ch)
 		return true

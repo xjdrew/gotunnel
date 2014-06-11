@@ -25,6 +25,7 @@ func init() {
 
 type Service interface {
 	Start() error
+	Reload() error
 	Stop()
 	Wait()
 }
@@ -57,6 +58,12 @@ func (self *App) Start() error {
 	return nil
 }
 
+func (self *App) Reload() {
+	for _, service := range self.services {
+		service.Reload()
+	}
+}
+
 func (self *App) Stop() {
 	for _, service := range self.services {
 		service.Stop()
@@ -68,16 +75,20 @@ func (self *App) Wait() {
 }
 
 const SIG_STOP = syscall.Signal(34)
-const SIG_STATUS = syscall.Signal(35)
+const SIG_RELOAD = syscall.Signal(35)
+const SIG_STATUS = syscall.Signal(36)
 
 func handleSignal(app *App) {
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, SIG_STOP, SIG_STATUS, syscall.SIGTERM)
+	signal.Notify(c, SIG_STOP, SIG_RELOAD, SIG_STATUS, syscall.SIGTERM)
 
 	for sig := range c {
+		Info("catch signial:%d", sig)
 		switch sig {
 		case SIG_STOP:
 			app.Stop()
+		case SIG_RELOAD:
+			app.Reload()
 		case SIG_STATUS:
 			Info("catch sigstatus, ignore")
 		case syscall.SIGTERM:

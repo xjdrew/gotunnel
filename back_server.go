@@ -40,6 +40,10 @@ func (self *BackServer) Start() error {
 	return nil
 }
 
+func (self *BackServer) Reload() error {
+	return nil
+}
+
 func (self *BackServer) handleClient(conn *net.TCPConn) {
 	defer conn.Close()
 

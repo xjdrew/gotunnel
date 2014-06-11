@@ -158,6 +158,17 @@ func (self *BackClient) Start() error {
 	return nil
 }
 
+func (self *BackClient) Reload() error {
+	Info("reload services")
+	upstream, err := self.readSettings()
+	if err != nil {
+		Error("back client reload failed:%v", err)
+		return err
+	}
+	self.upstream = upstream
+	return nil
+}
+
 func (self *BackClient) Stop() {
 }
 

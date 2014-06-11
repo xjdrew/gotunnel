@@ -1,4 +1,9 @@
-## 原理
+## gotunnel
+### features
+*  support rc4 encryption
+*  support tgw header
+*  support reload back end services
+
 ### tunnel stack
 
 SOURCE   | DESTINATION

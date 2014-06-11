@@ -3,7 +3,7 @@
 //   author: xjdrew
 //
 
-package main
+package tunnel
 
 import (
 	"net"
@@ -76,6 +76,6 @@ func (self *BackServer) Wait() {
 
 func NewBackServer() *BackServer {
 	backDoor := new(BackServer)
-	backDoor.TcpServer.addr = options.backAddr
+	backDoor.TcpServer.addr = options.BackAddr
 	return backDoor
 }

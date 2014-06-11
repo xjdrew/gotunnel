@@ -3,7 +3,7 @@
 //   author: xjdrew
 //
 
-package main
+package tunnel
 
 import (
 	"io"
@@ -23,19 +23,19 @@ func _print(format string, a ...interface{}) {
 }
 
 func Debug(format string, a ...interface{}) {
-	if options.logLevel > 2 {
+	if options.LogLevel > 2 {
 		_print(format, a...)
 	}
 }
 
 func Info(format string, a ...interface{}) {
-	if options.logLevel > 1 {
+	if options.LogLevel > 1 {
 		_print(format, a...)
 	}
 }
 
 func Error(format string, a ...interface{}) {
-	if options.logLevel > 0 {
+	if options.LogLevel > 0 {
 		_print(format, a...)
 	}
 }

@@ -1,4 +1,9 @@
-package main
+//
+//   date  : 2014-06-11
+//   author: xjdrew
+//
+
+package tunnel
 
 import (
 	"bytes"
@@ -9,7 +14,7 @@ import (
 var ErrWrongTGW = errors.New("wrong tgw header")
 
 func skipTGW(conn *net.TCPConn) (err error) {
-	sz := len(options.tgw)
+	sz := len(options.Tgw)
 	if sz == 0 {
 		return
 	}
@@ -24,21 +29,21 @@ func skipTGW(conn *net.TCPConn) (err error) {
 		}
 		s += n
 	}
-	if bytes.Compare(bytes.ToLower(buf), options.tgw) == 0 {
+	if bytes.Compare(bytes.ToLower(buf), options.Tgw) == 0 {
 		return
 	}
 	return ErrWrongTGW
 }
 
 func writeTGW(conn *net.TCPConn) (err error) {
-	sz := len(options.tgw)
+	sz := len(options.Tgw)
 	if sz == 0 {
 		return
 	}
 	s := 0
 	for s < sz {
 		var n int
-		n, err = conn.Write(options.tgw[s:])
+		n, err = conn.Write(options.Tgw[s:])
 		if err != nil {
 			return
 		}

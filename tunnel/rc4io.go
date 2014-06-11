@@ -1,4 +1,9 @@
-package main
+//
+//   date  : 2014-06-11
+//   author: xjdrew
+//
+
+package tunnel
 
 import (
 	"crypto/rc4"

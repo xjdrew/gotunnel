@@ -3,7 +3,7 @@
 //   author: xjdrew
 //
 
-package main
+package tunnel
 
 import (
 	"bytes"
@@ -163,7 +163,7 @@ func (self *Coor) Wait() {
 	// tunnel disconnect, so reset all link
 	Info("reset all link")
 	var i uint16 = 1
-	for ; i < options.capacity; i++ {
+	for ; i < options.Capacity; i++ {
 		ch, _ := self.Reset(i)
 		if ch != nil {
 			ch <- nil
@@ -174,5 +174,5 @@ func (self *Coor) Wait() {
 
 func NewCoor(tunnel *Tunnel, door Door) *Coor {
 	var wg sync.WaitGroup
-	return &Coor{NewLinkSet(options.capacity), tunnel, door, wg}
+	return &Coor{NewLinkSet(options.Capacity), tunnel, door, wg}
 }

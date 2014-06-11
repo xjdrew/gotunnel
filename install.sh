@@ -1,9 +1,11 @@
 #!/bin/bash
 
 mkdir -p gospace/src
-export GOPATH=`pwd`/gospace
-git clone https://github.com/xjdrew/gotunnel gospace/src/gotunnel
-go install gotunnel
+cd gospace
+export GOPATH=`pwd`
+
+go get github.com/xjdrew/gotunnel
+go install github.com/xjdrew/gotunnel
 
 # finish
 echo "gotunnel is in gospace/bin/, go and run"

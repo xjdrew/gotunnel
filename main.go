@@ -94,6 +94,7 @@ type Options struct {
 	configFile string
 	logLevel   int
 	tgw        []byte
+	rc4Key     []byte
 }
 
 var options Options
@@ -104,17 +105,27 @@ func usage() {
 	os.Exit(1)
 }
 
-func main() {
+func argsCheck() {
 	var tgw string
+	var rc4Key string
 	flag.BoolVar(&options.gate, "gate", false, "as gate or node")
 	flag.StringVar(&tgw, "tgw", "", "tgw header")
+	flag.StringVar(&rc4Key, "rc4", "the answer to life, the universe and everything", "rc4 key, disable if no key")
 	flag.StringVar(&options.frontAddr, "front_addr", "0.0.0.0:8001", "front door address(0.0.0.0:8001)")
 	flag.StringVar(&options.backAddr, "back_addr", "0.0.0.0:8002", "back door address(0.0.0.0:8002)")
 	flag.IntVar(&options.logLevel, "log", 1, "larger value for detail log")
 	flag.Usage = usage
 	flag.Parse()
 
+	options.capacity = 65535
 	options.tgw = bytes.ToLower([]byte(tgw))
+	options.rc4Key = []byte(rc4Key)
+
+	if len(options.rc4Key) > 256 {
+		Error("rc4 key at most 256 bytes")
+		os.Exit(1)
+	}
+
 	if !options.gate {
 		args := flag.Args()
 		if len(args) < 1 {
@@ -123,8 +134,11 @@ func main() {
 			options.configFile = args[0]
 		}
 	}
+}
 
-	options.capacity = 65535
+func main() {
+	// parse argument and check
+	argsCheck()
 
 	app := new(App)
 	if options.gate {

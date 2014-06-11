@@ -1,4 +1,9 @@
-package main
+//
+//   date  : 2014-06-04
+//   author: xjdrew
+//
+
+package tunnel
 
 import (
 	"bufio"

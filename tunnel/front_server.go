@@ -3,7 +3,7 @@
 //   author: xjdrew
 //
 
-package main
+package tunnel
 
 import (
 	"net"
@@ -99,6 +99,6 @@ func (self *FrontServer) Wait() {
 func NewFrontServer(tunnel *Tunnel) *FrontServer {
 	frontServer := new(FrontServer)
 	frontServer.coor = NewCoor(tunnel, nil)
-	frontServer.TcpServer.addr = options.frontAddr
+	frontServer.TcpServer.addr = options.FrontAddr
 	return frontServer
 }

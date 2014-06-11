@@ -3,7 +3,7 @@
 //   author: xjdrew
 //
 
-package main
+package tunnel
 
 import (
 	"encoding/json"
@@ -178,7 +178,7 @@ func (self *BackClient) Wait() {
 
 func NewBackClient() *BackClient {
 	backClient := new(BackClient)
-	backClient.configFile = options.configFile
-	backClient.backAddr = options.backAddr
+	backClient.configFile = options.ConfigFile
+	backClient.backAddr = options.BackAddr
 	return backClient
 }

@@ -3,7 +3,7 @@
 //   author: xjdrew
 //
 
-package main
+package tunnel
 
 import (
 	"bufio"
@@ -43,7 +43,7 @@ func (self *Tunnel) PumpOut() (err error) {
 		Sz     uint8
 	}
 
-	rd := NewRC4Reader(bufio.NewReaderSize(self.conn, 4096), options.rc4Key)
+	rd := NewRC4Reader(bufio.NewReaderSize(self.conn, 4096), options.Rc4Key)
 	for {
 		err = binary.Read(rd, binary.LittleEndian, &header)
 		if err != nil {
@@ -78,7 +78,7 @@ func (self *Tunnel) PumpUp() (err error) {
 		Sz     uint8
 	}
 
-	wr := NewRC4Writer(self.conn, options.rc4Key)
+	wr := NewRC4Writer(self.conn, options.Rc4Key)
 	for {
 		payload := <-self.inputCh
 

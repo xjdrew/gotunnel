@@ -10,16 +10,16 @@ import (
 	"time"
 )
 
-
 type Options struct {
-	Gate       bool
-	Capacity   uint16
-	FrontAddr  string
-	BackAddr   string
-	ConfigFile string
-	LogLevel   int
-	Tgw        []byte
-	Rc4Key     []byte
+	TunnelServer bool // tunnel server or client
+	Front        bool // front server or back server
+	Capacity     uint16
+	FrontAddr    string
+	TunnelAddr   string
+	ConfigFile   string
+	LogLevel     int
+	Tgw          []byte
+	Rc4Key       []byte
 }
 
 var options *Options
@@ -80,7 +80,6 @@ func (self *App) Wait() {
 }
 
 func NewApp(o *Options) *App {
-    options = o
-    return new(App)
+	options = o
+	return new(App)
 }
-

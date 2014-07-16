@@ -25,7 +25,7 @@ type Upstream struct {
 	weight int
 }
 
-type BackClient struct {
+type BackDoor struct {
 	configFile string
 	backAddr   string
 	wg         sync.WaitGroup
@@ -33,7 +33,7 @@ type BackClient struct {
 	coor       *Coor
 }
 
-func (self *BackClient) readSettings() (upstream *Upstream, err error) {
+func (self *BackDoor) readSettings() (upstream *Upstream, err error) {
 	fp, err := os.Open(self.configFile)
 	if err != nil {
 		Error("open config file failed:%s", err.Error())
@@ -63,7 +63,7 @@ func (self *BackClient) readSettings() (upstream *Upstream, err error) {
 	return
 }
 
-func (self *BackClient) chooseHost() (host *Host) {
+func (self *BackDoor) chooseHost() (host *Host) {
 	upstream := self.upstream
 	if upstream.weight <= 0 {
 		return
@@ -79,7 +79,7 @@ func (self *BackClient) chooseHost() (host *Host) {
 	return
 }
 
-func (self *BackClient) handleLink(linkid uint16, ch chan []byte) {
+func (self *BackDoor) handleLink(linkid uint16, ch chan []byte) {
 	defer self.wg.Done()
 
 	host := self.chooseHost()
@@ -103,7 +103,7 @@ func (self *BackClient) handleLink(linkid uint16, ch chan []byte) {
 	link.Pump(self.coor, ch)
 }
 
-func (self *BackClient) ctrl(cmd *CmdPayload) bool {
+func (self *BackDoor) ctrl(cmd *CmdPayload) bool {
 	linkid := cmd.Linkid
 	switch cmd.Cmd {
 	case LINK_CREATE:
@@ -123,42 +123,25 @@ func (self *BackClient) ctrl(cmd *CmdPayload) bool {
 	}
 }
 
-func (self *BackClient) pump() {
+func (self *BackDoor) pump() {
 	defer self.wg.Done()
 	self.coor.Start()
 	self.coor.Wait()
 }
 
-func (self *BackClient) Start() error {
+func (self *BackDoor) Start() error {
 	upstream, err := self.readSettings()
 	if err != nil {
 		return err
 	}
 	self.upstream = upstream
 
-	addr, err := net.ResolveTCPAddr("tcp", self.backAddr)
-	if err != nil {
-		return err
-	}
-	conn, err := net.DialTCP("tcp", nil, addr)
-	if err != nil {
-		return err
-	}
-
-	err = writeTGW(conn)
-	if err != nil {
-		Error("write tgw failed")
-		return err
-	}
-
-	self.coor = NewCoor(NewTunnel(conn), self)
-
 	self.wg.Add(1)
 	go self.pump()
 	return nil
 }
 
-func (self *BackClient) Reload() error {
+func (self *BackDoor) Reload() error {
 	Info("reload services")
 	upstream, err := self.readSettings()
 	if err != nil {
@@ -169,16 +152,17 @@ func (self *BackClient) Reload() error {
 	return nil
 }
 
-func (self *BackClient) Stop() {
+func (self *BackDoor) Stop() {
 }
 
-func (self *BackClient) Wait() {
+func (self *BackDoor) Wait() {
 	self.wg.Wait()
 }
 
-func NewBackClient() *BackClient {
-	backClient := new(BackClient)
-	backClient.configFile = options.ConfigFile
-	backClient.backAddr = options.BackAddr
-	return backClient
+func NewBackDoor(tunnel *Tunnel) Service {
+	backDoor := new(BackDoor)
+	backDoor.configFile = options.ConfigFile
+	backDoor.backAddr = options.TunnelAddr
+	backDoor.coor = NewCoor(tunnel, backDoor)
+	return backDoor
 }

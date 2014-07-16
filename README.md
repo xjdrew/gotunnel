@@ -27,14 +27,14 @@ go install gotunnel
 
 ## run
 
-###launch gate(defaut port 8001, 8002):
+### launch tunnel server and user gate in one(defaut port 8001, 8002):
 ```
-./gotunnel -gate
+./gotunnel -tunnel_server -front
 ```
 
-###launch node(defaut service port 1234):
+###launch back node(defaut service port 1234):
 ```
-./gotunnel -back_addr=127.0.0.1:8002 settings.conf
+./gotunnel -tunnel_addr=127.0.0.1:8002 settings.conf
 ```
 
 ###launch service:

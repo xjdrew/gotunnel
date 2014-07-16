@@ -10,12 +10,13 @@ import (
 	"sync"
 )
 
-type BackServer struct {
+type TunnelServer struct {
 	TcpServer
-	wg sync.WaitGroup
+	wg      sync.WaitGroup
+	newDoor func(*Tunnel) Service
 }
 
-func (self *BackServer) listen() {
+func (self *TunnelServer) listen() {
 	defer self.wg.Done()
 
 	for {
@@ -29,7 +30,7 @@ func (self *BackServer) listen() {
 	}
 }
 
-func (self *BackServer) Start() error {
+func (self *TunnelServer) Start() error {
 	err := self.buildListener()
 	if err != nil {
 		return err
@@ -40,11 +41,11 @@ func (self *BackServer) Start() error {
 	return nil
 }
 
-func (self *BackServer) Reload() error {
+func (self *TunnelServer) Reload() error {
 	return nil
 }
 
-func (self *BackServer) handleClient(conn *net.TCPConn) {
+func (self *TunnelServer) handleClient(conn *net.TCPConn) {
 	defer conn.Close()
 
 	// try skip tgw
@@ -56,26 +57,27 @@ func (self *BackServer) handleClient(conn *net.TCPConn) {
 
 	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
 	tunnel := NewTunnel(conn)
-	frontDoor := NewFrontServer(tunnel)
-	err = frontDoor.Start()
+	door := self.newDoor(tunnel)
+	err = door.Start()
 	if err != nil {
-		Error("frontDoor start failed:%s", err.Error())
+		Error("door start failed:%s", err.Error())
 		return
 	}
-	frontDoor.Wait()
+	door.Wait()
 }
 
-func (self *BackServer) Stop() {
+func (self *TunnelServer) Stop() {
 	self.closeListener()
 }
 
-func (self *BackServer) Wait() {
+func (self *TunnelServer) Wait() {
 	self.wg.Wait()
 	Error("back door quit")
 }
 
-func NewBackServer() *BackServer {
-	backDoor := new(BackServer)
-	backDoor.TcpServer.addr = options.BackAddr
-	return backDoor
+func NewTunnelServer(newDoor func(*Tunnel) Service) *TunnelServer {
+	tunnelServer := new(TunnelServer)
+	tunnelServer.TcpServer.addr = options.TunnelAddr
+	tunnelServer.newDoor = newDoor
+	return tunnelServer
 }

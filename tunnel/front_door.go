@@ -10,20 +10,20 @@ import (
 	"sync"
 )
 
-type FrontServer struct {
+type FrontDoor struct {
 	TcpServer
 	wg   sync.WaitGroup
 	coor *Coor
 }
 
-func (self *FrontServer) pump() {
+func (self *FrontDoor) pump() {
 	defer self.wg.Done()
 	self.coor.Start()
 	self.coor.Wait()
 	self.closeListener()
 }
 
-func (self *FrontServer) listen() {
+func (self *FrontDoor) listen() {
 	defer self.wg.Done()
 	for {
 		conn, err := self.accept()
@@ -37,7 +37,7 @@ func (self *FrontServer) listen() {
 	}
 }
 
-func (self *FrontServer) Start() error {
+func (self *FrontDoor) Start() error {
 	err := self.buildListener()
 	if err != nil {
 		return err
@@ -51,7 +51,7 @@ func (self *FrontServer) Start() error {
 	return nil
 }
 
-func (self *FrontServer) handleClient(conn *net.TCPConn) {
+func (self *FrontDoor) handleClient(conn *net.TCPConn) {
 	defer self.wg.Done()
 
 	// try skip tgw
@@ -87,18 +87,22 @@ func (self *FrontServer) handleClient(conn *net.TCPConn) {
 	link.Pump(self.coor, ch)
 }
 
-func (self *FrontServer) Stop() {
+func (self *FrontDoor) Reload() error {
+	return nil
+}
+
+func (self *FrontDoor) Stop() {
 	self.closeListener()
 }
 
-func (self *FrontServer) Wait() {
+func (self *FrontDoor) Wait() {
 	self.wg.Wait()
 	Error("front door quit")
 }
 
-func NewFrontServer(tunnel *Tunnel) *FrontServer {
-	frontServer := new(FrontServer)
-	frontServer.coor = NewCoor(tunnel, nil)
-	frontServer.TcpServer.addr = options.FrontAddr
-	return frontServer
+func NewFrontDoor(tunnel *Tunnel) Service {
+	frontDoor := new(FrontDoor)
+	frontDoor.coor = NewCoor(tunnel, nil)
+	frontDoor.TcpServer.addr = options.FrontAddr
+	return frontDoor
 }

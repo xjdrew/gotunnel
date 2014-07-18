@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"net"
+	"time"
 )
 
 type TunnelPayload struct {
@@ -111,5 +112,8 @@ func (self *Tunnel) PumpUp() (err error) {
 }
 
 func NewTunnel(conn *net.TCPConn) *Tunnel {
+	conn.SetKeepAlive(true)
+	conn.SetKeepAlivePeriod(time.Second * 60)
+	conn.SetLinger(-1)
 	return &Tunnel{make(chan *TunnelPayload, 65535), make(chan *TunnelPayload, 65535), conn}
 }

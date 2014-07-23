@@ -49,14 +49,10 @@ func (self *Link) download(ch chan []byte) {
 			break
 		}
 
-		c := 0
-		for c < len(data) {
-			n, err := self.conn.Write(data[c:])
-			if err != nil {
-				self.setError(err)
-				return
-			}
-			c += n
+		_, err := self.conn.Write(data)
+		if err != nil {
+			self.setError(err)
+			return
 		}
 	}
 	// receive LINK_DESTROY, so close conn

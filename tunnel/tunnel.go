@@ -97,15 +97,10 @@ func (self *Tunnel) PumpUp() (err error) {
 			return
 		}
 
-		c := 0
-		for c < sz {
-			var n int
-			n, err = wr.Write(payload.Data[c:])
-			if err != nil {
-				Error("write tunnel failed:%s", err.Error())
-				return
-			}
-			c += n
+		_, err = wr.Write(payload.Data)
+		if err != nil {
+			Error("write tunnel failed:%s", err.Error())
+			return
 		}
 	}
 	return

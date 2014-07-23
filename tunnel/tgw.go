@@ -40,14 +40,9 @@ func writeTGW(conn *net.TCPConn) (err error) {
 	if sz == 0 {
 		return
 	}
-	s := 0
-	for s < sz {
-		var n int
-		n, err = conn.Write(options.Tgw[s:])
-		if err != nil {
-			return
-		}
-		s += n
+	_, err = conn.Write(options.Tgw)
+	if err != nil {
+		return
 	}
 	return
 }

@@ -35,16 +35,16 @@ func (self *Tunnel) Pop() *TunnelPayload {
 	return payload
 }
 
-// read
+// read from tunnel
 func (self *Tunnel) PumpOut() (err error) {
 	defer close(self.outputCh)
 
 	var header struct {
 		Linkid uint16
-		Sz     uint8
+		Sz     uint16
 	}
 
-	rd := NewRC4Reader(bufio.NewReaderSize(self.conn, 4096), options.Rc4Key)
+	rd := NewRC4Reader(bufio.NewReaderSize(self.conn, 8192), options.Rc4Key)
 	for {
 		err = binary.Read(rd, binary.LittleEndian, &header)
 		if err != nil {
@@ -72,11 +72,11 @@ func (self *Tunnel) PumpOut() (err error) {
 	return
 }
 
-// write
+// write to tunnel
 func (self *Tunnel) PumpUp() (err error) {
 	var header struct {
 		Linkid uint16
-		Sz     uint8
+		Sz     uint16
 	}
 
 	wr := NewRC4Writer(self.conn, options.Rc4Key)
@@ -84,13 +84,13 @@ func (self *Tunnel) PumpUp() (err error) {
 		payload := <-self.inputCh
 
 		sz := len(payload.Data)
-		if sz > 0xff {
+		if sz > 0xffff {
 			Panic("receive malformed payload, linkid:%d, sz:%d", payload.Linkid, sz)
 			break
 		}
 
 		header.Linkid = payload.Linkid
-		header.Sz = uint8(sz)
+		header.Sz = uint16(sz)
 		err = binary.Write(wr, binary.LittleEndian, &header)
 		if err != nil {
 			Error("write tunnel failed:%s", err.Error())

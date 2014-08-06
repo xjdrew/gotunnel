@@ -30,7 +30,7 @@ func (self *Link) setError(err error) {
 func (self *Link) upload(coor *Coor) {
 	rd := bufio.NewReaderSize(self.conn, 4096)
 	for {
-		buffer := make([]byte, 0xff)
+		buffer := make([]byte, 4096)
 		n, err := rd.Read(buffer)
 		if err != nil {
 			self.setError(err)
@@ -49,6 +49,7 @@ func (self *Link) download(ch chan []byte) {
 			break
 		}
 
+		Debug("link(%d) write %d bytes:%s", self.id, len(data), string(data))
 		_, err := self.conn.Write(data)
 		if err != nil {
 			self.setError(err)

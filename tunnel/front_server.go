@@ -99,7 +99,12 @@ func (self *FrontServer) listen() {
 		conn, err := self.accept()
 		if err != nil {
 			Error("front server acceept failed:%s", err.Error())
-			break
+			if opErr, ok := err.(*net.OpError); ok {
+				if !opErr.Temporary() {
+					break
+				}
+			}
+			continue
 		}
 		Debug("front server, new connection from %v", conn.RemoteAddr())
 		self.wg.Add(1)

@@ -62,7 +62,12 @@ func (self *TunnelServer) listen() {
 		conn, err := self.accept()
 		if err != nil {
 			Error("back server acceept failed:%s", err.Error())
-			return
+			if opErr, ok := err.(*net.OpError); ok {
+				if !opErr.Temporary() {
+					break
+				}
+			}
+			continue
 		}
 		Debug("back server, new connection from %v", conn.RemoteAddr())
 		self.wg.Add(1)

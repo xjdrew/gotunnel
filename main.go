@@ -6,7 +6,6 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"os"
@@ -22,7 +21,7 @@ const SIG_STATUS = syscall.Signal(36)
 
 func handleSignal(app *tunnel.App) {
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, SIG_STOP, SIG_RELOAD, SIG_STATUS, syscall.SIGTERM)
+	signal.Notify(c, SIG_STOP, SIG_RELOAD, SIG_STATUS, syscall.SIGTERM, syscall.SIGHUP)
 
 	for sig := range c {
 		switch sig {
@@ -30,10 +29,10 @@ func handleSignal(app *tunnel.App) {
 			app.Stop()
 		case SIG_RELOAD:
 			app.Reload()
-		case SIG_STATUS:
-			fmt.Println("catch sigstatus, ignore")
-		case syscall.SIGTERM:
-			fmt.Println("catch sigterm, ignore")
+        case SIG_STATUS:
+            app.Status()
+		default:
+			tunnel.Log("catch signal:%v, ignore", sig)
 		}
 	}
 }
@@ -47,20 +46,16 @@ func usage() {
 func argsCheck() *tunnel.Options {
 	var options tunnel.Options
 
-	var tgw string
 	var rc4Key string
-	flag.BoolVar(&options.TunnelServer, "tunnel_server", false, "work as tunnel server or client")
-	flag.BoolVar(&options.Front, "front", false, "work as front door or back door")
-	flag.StringVar(&tgw, "tgw", "", "tgw header")
-	flag.StringVar(&rc4Key, "rc4", "the answer to life, the universe and everything", "rc4 key, disable if no key")
-	flag.StringVar(&options.FrontAddr, "front_addr", "0.0.0.0:8001", "front door address(0.0.0.0:8001)")
-	flag.StringVar(&options.TunnelAddr, "tunnel_addr", "0.0.0.0:8002", "tunnel door address(0.0.0.0:8002)")
+	flag.StringVar(&options.Listen, "listen", ":8001", "host:port gotunnel listen on")
+	flag.StringVar(&options.Server, "server", "", "server address, empty if work as server")
 	flag.IntVar(&options.LogLevel, "log", 1, "larger value for detail log")
+	flag.StringVar(&rc4Key, "rc4", "the answer to life, the universe and everything", "rc4 key, disable if no key")
+	flag.IntVar(&options.Count, "count", 1, "underlayer tunnel count")
 	flag.Usage = usage
 	flag.Parse()
 
 	options.Capacity = 65535
-	options.Tgw = bytes.ToLower([]byte(tgw))
 	options.Rc4Key = []byte(rc4Key)
 
 	if len(options.Rc4Key) > 256 {
@@ -68,7 +63,12 @@ func argsCheck() *tunnel.Options {
 		os.Exit(1)
 	}
 
-	if !options.Front {
+	if options.Count <= 0 || options.Count > 1024 {
+		fmt.Println("tunnel count must be in range [1, 1024]")
+		os.Exit(1)
+	}
+
+	if options.Server == "" {
 		args := flag.Args()
 		if len(args) < 1 {
 			usage()
@@ -84,22 +84,10 @@ func main() {
 	options := argsCheck()
 
 	app := tunnel.NewApp(options)
-	if options.TunnelServer {
-		var tunnelServer *tunnel.TunnelServer
-		if options.Front {
-			tunnelServer = tunnel.NewTunnelServer(tunnel.NewFrontDoor)
-		} else {
-			tunnelServer = tunnel.NewTunnelServer(tunnel.NewBackDoor)
-		}
-		app.Add(tunnelServer)
+	if options.Server == "" {
+		app.Add(tunnel.NewTunnelServer())
 	} else {
-		var tunnelClient *tunnel.TunnelClient
-		if options.Front {
-			tunnelClient = tunnel.NewTunnelClient(tunnel.NewFrontDoor)
-		} else {
-			tunnelClient = tunnel.NewTunnelClient(tunnel.NewBackDoor)
-		}
-		app.Add(tunnelClient)
+		app.Add(tunnel.NewTunnelClient())
 	}
 
 	err := app.Start()

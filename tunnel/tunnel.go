@@ -23,6 +23,12 @@ type Tunnel struct {
 	conn     *net.TCPConn
 }
 
+func (self *Tunnel) Close() {
+	if self.conn != nil {
+		self.conn.Close()
+	}
+}
+
 func (self *Tunnel) Put(payload *TunnelPayload) {
 	self.inputCh <- payload
 }
@@ -106,7 +112,7 @@ func (self *Tunnel) PumpUp() (err error) {
 	return
 }
 
-func NewTunnel(conn *net.TCPConn) *Tunnel {
+func newTunnel(conn *net.TCPConn) *Tunnel {
 	conn.SetKeepAlive(true)
 	conn.SetKeepAlivePeriod(time.Second * 60)
 	conn.SetLinger(-1)

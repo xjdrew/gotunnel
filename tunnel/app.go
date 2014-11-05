@@ -8,18 +8,17 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+    "runtime"
 )
 
 type Options struct {
-	TunnelServer bool // tunnel server or client
-	Front        bool // front server or back server
-	Capacity     uint16
-	FrontAddr    string
-	TunnelAddr   string
-	ConfigFile   string
-	LogLevel     int
-	Tgw          []byte
-	Rc4Key       []byte
+	Listen     string
+	Server     string // tunnel server or client
+	Count      int // tunnel count underlayer
+	Capacity   uint16
+	ConfigFile string
+	LogLevel   int
+	Rc4Key     []byte
 }
 
 var options *Options
@@ -77,6 +76,10 @@ func (self *App) Stop() {
 
 func (self *App) Wait() {
 	self.wg.Wait()
+}
+
+func (self *App) Status() {
+    Log("num goroutine: %d", runtime.NumGoroutine)
 }
 
 func NewApp(o *Options) *App {

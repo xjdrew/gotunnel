@@ -22,30 +22,25 @@ type CmdPayload struct {
 	Linkid uint16
 }
 
-type Door interface {
-	ctrl(cmd *CmdPayload) bool
-}
-
-type Coor struct {
-	LinkSet
+type Hub struct {
+	*LinkSet
 	tunnel *Tunnel
-	door   Door
 	wg     sync.WaitGroup
 }
 
-func (self *Coor) SendLinkCreate(linkid uint16) {
+func (self *Hub) SendLinkCreate(linkid uint16) {
 	self.Send(LINK_CREATE, linkid, nil)
 }
 
-func (self *Coor) SendLinkDestory(linkid uint16) {
+func (self *Hub) SendLinkDestory(linkid uint16) {
 	self.Send(LINK_DESTROY, linkid, nil)
 }
 
-func (self *Coor) SendLinkData(linkid uint16, data []byte) {
+func (self *Hub) SendLinkData(linkid uint16, data []byte) {
 	self.Send(LINK_DATA, linkid, data)
 }
 
-func (self *Coor) Send(cmd uint8, linkid uint16, data []byte) {
+func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) {
 	payload := new(TunnelPayload)
 	switch cmd {
 	case LINK_DATA:
@@ -70,13 +65,9 @@ func (self *Coor) Send(cmd uint8, linkid uint16, data []byte) {
 	self.tunnel.Put(payload)
 }
 
-func (self *Coor) ctrl(cmd *CmdPayload) {
+func (self *Hub) ctrl(cmd *CmdPayload) {
 	linkid := cmd.Linkid
 	Debug("link(%d) recv cmd:%d", linkid, cmd.Cmd)
-
-	if self.door != nil && self.door.ctrl(cmd) {
-		return
-	}
 
 	switch cmd.Cmd {
 	case LINK_DESTROY:
@@ -96,7 +87,7 @@ func (self *Coor) ctrl(cmd *CmdPayload) {
 	}
 }
 
-func (self *Coor) data(payload *TunnelPayload) {
+func (self *Hub) data(payload *TunnelPayload) {
 	linkid := payload.Linkid
 	Debug("link(%d) recv data:%d", linkid, len(payload.Data))
 
@@ -113,7 +104,7 @@ func (self *Coor) data(payload *TunnelPayload) {
 	}
 }
 
-func (self *Coor) dispatch() {
+func (self *Hub) dispatch() {
 	defer self.wg.Done()
 	for {
 		payload := self.tunnel.Pop()
@@ -137,17 +128,17 @@ func (self *Coor) dispatch() {
 	}
 }
 
-func (self *Coor) pumpOut() {
+func (self *Hub) pumpOut() {
 	self.wg.Done()
 	self.tunnel.PumpOut()
 }
 
-func (self *Coor) pumpUp() {
+func (self *Hub) pumpUp() {
 	self.wg.Done()
 	self.tunnel.PumpUp()
 }
 
-func (self *Coor) Start() error {
+func (self *Hub) Start() error {
 	self.wg.Add(1)
 	go self.pumpOut()
 	self.wg.Add(1)
@@ -157,9 +148,12 @@ func (self *Coor) Start() error {
 	return nil
 }
 
-func (self *Coor) Wait() {
+func (self *Hub) Close() {
+	self.tunnel.Close()
+}
+
+func (self *Hub) Wait() {
 	self.wg.Wait()
-	Error("coor quit")
 	// tunnel disconnect, so reset all link
 	Info("reset all link")
 	var i uint16 = 1
@@ -170,9 +164,10 @@ func (self *Coor) Wait() {
 			Info("link(%d) closed", i)
 		}
 	}
+	Log("coor quit")
 }
 
-func NewCoor(tunnel *Tunnel, door Door) *Coor {
+func newHub(tunnel *Tunnel) *Hub {
 	var wg sync.WaitGroup
-	return &Coor{NewLinkSet(options.Capacity), tunnel, door, wg}
+	return &Hub{newLinkSet(), tunnel, wg}
 }

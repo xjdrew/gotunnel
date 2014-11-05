@@ -11,37 +11,83 @@ import (
 )
 
 type TunnelClient struct {
-	tunnelAddr string
-	wg         sync.WaitGroup
-	newDoor    func(*Tunnel) Service
+	TcpServer
+	hub *Hub
+	wg  sync.WaitGroup
+}
+
+func (self *TunnelClient) createHub() error {
+	conn, err := net.Dial("tcp", options.Server)
+	if err != nil {
+		return err
+	}
+	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
+	self.hub = newHub(newTunnel(conn.(*net.TCPConn)))
+	return err
+}
+
+func (self *TunnelClient) handleClient(conn *net.TCPConn) {
+	defer self.wg.Done()
+	defer conn.Close()
+
+	linkid := self.hub.AcquireId()
+	if linkid == 0 {
+		Error("alloc linkid failed, source: %v", conn.RemoteAddr())
+		return
+	}
+
+	ch := make(chan []byte, 256)
+	err := self.hub.Set(linkid, ch)
+	if err != nil {
+		//impossible
+		Error("set link failed, linkid:%d, source: %v", linkid, conn.RemoteAddr())
+		return
+	}
+
+	Info("link(%d) create link, source: %v", linkid, conn.RemoteAddr())
+
+	defer self.hub.ReleaseId(linkid)
+	self.hub.SendLinkCreate(linkid)
+
+	link := NewLink(linkid, conn)
+	link.Pump(self.hub, ch)
+}
+
+func (self *TunnelClient) listen() {
+	defer self.wg.Done()
+	for {
+		conn, err := self.accept()
+		if err != nil {
+			Log("front server acceept failed:%s", err.Error())
+			if opErr, ok := err.(*net.OpError); ok {
+				if !opErr.Temporary() {
+					break
+				}
+			}
+			continue
+		}
+		Info("front server, new connection from %v", conn.RemoteAddr())
+		self.wg.Add(1)
+		go self.handleClient(conn)
+	}
 }
 
 func (self *TunnelClient) Start() error {
-	addr, err := net.ResolveTCPAddr("tcp", self.tunnelAddr)
+	err := self.createHub()
 	if err != nil {
 		return err
 	}
 
-	conn, err := net.DialTCP("tcp", nil, addr)
+	self.wg.Add(1)
+	go self.hub.Start()
+
+	err = self.buildListener()
 	if err != nil {
 		return err
 	}
 
-	err = writeTGW(conn)
-	if err != nil {
-		Error("write tgw failed")
-		return err
-	}
-
-	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
-	tunnel := NewTunnel(conn)
-	door := self.newDoor(tunnel)
-	err = door.Start()
-	if err != nil {
-		Error("door start failed:%s", err.Error())
-		return nil
-	}
-	door.Wait()
+	self.wg.Add(1)
+	go self.listen()
 	return nil
 }
 
@@ -50,15 +96,19 @@ func (self *TunnelClient) Reload() error {
 }
 
 func (self *TunnelClient) Stop() {
+	self.closeListener()
+	self.hub.Close()
+	Log("close tunnel client")
 }
 
 func (self *TunnelClient) Wait() {
+	self.hub.Wait()
 	self.wg.Wait()
+	Log("tunnel client quit")
 }
 
-func NewTunnelClient(newDoor func(*Tunnel) Service) *TunnelClient {
+func NewTunnelClient() *TunnelClient {
 	tunnelClient := new(TunnelClient)
-	tunnelClient.tunnelAddr = options.TunnelAddr
-	tunnelClient.newDoor = newDoor
+	tunnelClient.TcpServer.addr = options.Listen
 	return tunnelClient
 }

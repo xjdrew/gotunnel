@@ -51,7 +51,7 @@ func argsCheck() *tunnel.Options {
 	flag.StringVar(&options.Server, "server", "", "server address, empty if work as server")
 	flag.IntVar(&options.LogLevel, "log", 1, "larger value for detail log")
 	flag.StringVar(&rc4Key, "rc4", "the answer to life, the universe and everything", "rc4 key, disable if no key")
-	flag.IntVar(&options.Count, "count", 1, "underlayer tunnel count")
+	//flag.IntVar(&options.Count, "count", 1, "underlayer tunnel count")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -63,6 +63,8 @@ func argsCheck() *tunnel.Options {
 		os.Exit(1)
 	}
 
+	// will support multiple tunnel in future
+	options.Count = 1
 	if options.Count <= 0 || options.Count > 1024 {
 		fmt.Println("tunnel count must be in range [1, 1024]")
 		os.Exit(1)

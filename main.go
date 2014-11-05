@@ -29,8 +29,8 @@ func handleSignal(app *tunnel.App) {
 			app.Stop()
 		case SIG_RELOAD:
 			app.Reload()
-        case SIG_STATUS:
-            app.Status()
+		case SIG_STATUS:
+			app.Status()
 		default:
 			tunnel.Log("catch signal:%v, ignore", sig)
 		}

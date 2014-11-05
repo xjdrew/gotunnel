@@ -8,6 +8,7 @@ package tunnel
 import (
 	"bufio"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"time"
 )
@@ -21,6 +22,7 @@ type Tunnel struct {
 	inputCh  chan *TunnelPayload
 	outputCh chan *TunnelPayload
 	conn     *net.TCPConn
+	desc     string
 }
 
 func (self *Tunnel) Close() {
@@ -112,9 +114,19 @@ func (self *Tunnel) PumpUp() (err error) {
 	return
 }
 
+func (self *Tunnel) String() string {
+	return self.desc
+}
+
 func newTunnel(conn *net.TCPConn) *Tunnel {
 	conn.SetKeepAlive(true)
 	conn.SetKeepAlivePeriod(time.Second * 60)
 	conn.SetLinger(-1)
-	return &Tunnel{make(chan *TunnelPayload, 65535), make(chan *TunnelPayload, 65535), conn}
+	desc := fmt.Sprintf("tunnel[%s <-> %s]", conn.LocalAddr(), conn.RemoteAddr())
+	tunnel := new(Tunnel)
+	tunnel.inputCh = make(chan *TunnelPayload, 65535)
+	tunnel.outputCh = make(chan *TunnelPayload, 65535)
+	tunnel.conn = conn
+	tunnel.desc = desc
+	return tunnel
 }

@@ -6,15 +6,15 @@ package tunnel
 
 import (
 	"math/rand"
+	"runtime"
 	"sync"
 	"time"
-    "runtime"
 )
 
 type Options struct {
 	Listen     string
 	Server     string // tunnel server or client
-	Count      int // tunnel count underlayer
+	Count      int    // tunnel count underlayer
 	Capacity   uint16
 	ConfigFile string
 	LogLevel   int
@@ -79,7 +79,7 @@ func (self *App) Wait() {
 }
 
 func (self *App) Status() {
-    Log("num goroutine: %d", runtime.NumGoroutine)
+	Log("num goroutine: %d", runtime.NumGoroutine())
 }
 
 func NewApp(o *Options) *App {

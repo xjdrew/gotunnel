@@ -94,7 +94,7 @@ func newLinkSet() *LinkSet {
 		freeLinkid <- i
 	}
 
-    linkset := new(LinkSet)
+	linkset := new(LinkSet)
 	linkset.capacity = capacity
 	linkset.freeLinkid = freeLinkid
 	linkset.chs = make([]chan []byte, capacity)

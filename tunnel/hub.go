@@ -22,10 +22,19 @@ type CmdPayload struct {
 	Linkid uint16
 }
 
+type CtrlDelegate interface {
+	Ctrl(cmd *CmdPayload) bool
+}
+
 type Hub struct {
 	*LinkSet
-	tunnel *Tunnel
-	wg     sync.WaitGroup
+	tunnel   *Tunnel
+	delegate CtrlDelegate
+	wg       sync.WaitGroup
+}
+
+func (self *Hub) SetCtrlDelegate(delegate CtrlDelegate) {
+	self.delegate = delegate
 }
 
 func (self *Hub) SendLinkCreate(linkid uint16) {
@@ -68,6 +77,10 @@ func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) {
 func (self *Hub) ctrl(cmd *CmdPayload) {
 	linkid := cmd.Linkid
 	Debug("link(%d) recv cmd:%d", linkid, cmd.Cmd)
+
+	if self.delegate != nil && self.delegate.Ctrl(cmd) {
+		return
+	}
 
 	switch cmd.Cmd {
 	case LINK_DESTROY:
@@ -164,10 +177,12 @@ func (self *Hub) Wait() {
 			Info("link(%d) closed", i)
 		}
 	}
-	Log("coor quit")
+	Log("hub(%s) quit", self.tunnel.String())
 }
 
 func newHub(tunnel *Tunnel) *Hub {
-	var wg sync.WaitGroup
-	return &Hub{newLinkSet(), tunnel, wg}
+	hub := new(Hub)
+	hub.LinkSet = newLinkSet()
+	hub.tunnel = tunnel
+	return hub
 }

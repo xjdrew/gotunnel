@@ -99,7 +99,7 @@ func (self *ServerHub) handleLink(linkid uint16, ch chan []byte) {
 	link.Pump(self.Hub, ch)
 }
 
-func (self *ServerHub) ctrl(cmd *CmdPayload) {
+func (self *ServerHub) Ctrl(cmd *CmdPayload) bool {
 	linkid := cmd.Linkid
 	switch cmd.Cmd {
 	case LINK_CREATE:
@@ -113,9 +113,9 @@ func (self *ServerHub) ctrl(cmd *CmdPayload) {
 			self.Hub.wg.Add(1)
 			go self.handleLink(linkid, ch)
 		}
-	default:
-		self.Hub.ctrl(cmd)
+		return true
 	}
+	return false
 }
 
 func (self *ServerHub) Reload() error {
@@ -140,5 +140,9 @@ func (self *ServerHub) Start() error {
 }
 
 func newServerHub(tunnel *Tunnel) *ServerHub {
-	return &ServerHub{newHub(tunnel), nil}
+	serverHub := new(ServerHub)
+	hub := newHub(tunnel)
+	hub.SetCtrlDelegate(serverHub)
+	serverHub.Hub = hub
+	return serverHub
 }

@@ -38,7 +38,7 @@ func (self *TunnelServer) handleClient(conn *net.TCPConn) {
 	self.addHub(hub)
 	defer self.removeHub(hub)
 
-    err := hub.Start()
+	err := hub.Start()
 	if err != nil {
 		Error("hub start failed:%s", err.Error())
 		return

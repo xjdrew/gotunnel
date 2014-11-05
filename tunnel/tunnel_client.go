@@ -77,9 +77,7 @@ func (self *TunnelClient) Start() error {
 	if err != nil {
 		return err
 	}
-
-	self.wg.Add(1)
-	go self.hub.Start()
+	self.hub.Start()
 
 	err = self.buildListener()
 	if err != nil {

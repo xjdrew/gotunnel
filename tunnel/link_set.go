@@ -86,14 +86,15 @@ func (self *LinkSet) Get(linkid uint16) (ch chan []byte, err error) {
 	return
 }
 
-func NewLinkSet(capacity uint16) LinkSet {
+func newLinkSet() *LinkSet {
+	capacity := options.Capacity
 	freeLinkid := make(chan uint16, capacity)
 	var i uint16 = 1
 	for ; i < capacity; i++ {
 		freeLinkid <- i
 	}
 
-	var linkset LinkSet
+    linkset := new(LinkSet)
 	linkset.capacity = capacity
 	linkset.freeLinkid = freeLinkid
 	linkset.chs = make([]chan []byte, capacity)

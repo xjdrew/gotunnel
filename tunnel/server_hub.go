@@ -10,7 +10,6 @@ import (
 	"math/rand"
 	"net"
 	"os"
-	"sync"
 )
 
 type Host struct {
@@ -25,16 +24,13 @@ type Upstream struct {
 	weight int
 }
 
-type BackDoor struct {
-	configFile string
-	backAddr   string
-	wg         sync.WaitGroup
-	upstream   *Upstream
-	coor       *Coor
+type ServerHub struct {
+	*Hub
+	upstream *Upstream
 }
 
-func (self *BackDoor) readSettings() (upstream *Upstream, err error) {
-	fp, err := os.Open(self.configFile)
+func (self *ServerHub) readSettings() (upstream *Upstream, err error) {
+	fp, err := os.Open(options.ConfigFile)
 	if err != nil {
 		Error("open config file failed:%s", err.Error())
 		return
@@ -63,7 +59,7 @@ func (self *BackDoor) readSettings() (upstream *Upstream, err error) {
 	return
 }
 
-func (self *BackDoor) chooseHost() (host *Host) {
+func (self *ServerHub) chooseHost() (host *Host) {
 	upstream := self.upstream
 	if upstream.weight <= 0 {
 		return
@@ -79,90 +75,70 @@ func (self *BackDoor) chooseHost() (host *Host) {
 	return
 }
 
-func (self *BackDoor) handleLink(linkid uint16, ch chan []byte) {
-	defer self.wg.Done()
+func (self *ServerHub) handleLink(linkid uint16, ch chan []byte) {
+	defer self.Hub.wg.Done()
 
 	host := self.chooseHost()
 	if host == nil {
 		Error("link(%d) choose host failed", linkid)
-		self.coor.Reset(linkid)
-		self.coor.SendLinkDestory(linkid)
+		self.Reset(linkid)
+		self.SendLinkDestory(linkid)
 		return
 	}
 
 	dest, err := net.DialTCP("tcp", nil, host.addr)
 	if err != nil {
 		Error("link(%d) connect to host failed, host:%s, err:%v", linkid, host.Addr, err)
-		self.coor.Reset(linkid)
-		self.coor.SendLinkDestory(linkid)
+		self.Reset(linkid)
+		self.SendLinkDestory(linkid)
 		return
 	}
 
 	Info("link(%d) new connection to %v", linkid, dest.RemoteAddr())
 	link := NewLink(linkid, dest)
-	link.Pump(self.coor, ch)
+	link.Pump(self.Hub, ch)
 }
 
-func (self *BackDoor) ctrl(cmd *CmdPayload) bool {
+func (self *ServerHub) ctrl(cmd *CmdPayload) {
 	linkid := cmd.Linkid
 	switch cmd.Cmd {
 	case LINK_CREATE:
 		ch := make(chan []byte, 256)
-		err := self.coor.Set(linkid, ch)
+		err := self.Set(linkid, ch)
 		if err != nil {
 			Error("build link failed, linkid:%d, error:%s", linkid, err)
-			self.coor.SendLinkDestory(linkid)
-			return true
+			self.SendLinkDestory(linkid)
+		} else {
+			Info("link(%d) build link", linkid)
+			self.Hub.wg.Add(1)
+			go self.handleLink(linkid, ch)
 		}
-		Info("link(%d) build link", linkid)
-		self.wg.Add(1)
-		go self.handleLink(linkid, ch)
-		return true
 	default:
-		return false
+		self.Hub.ctrl(cmd)
 	}
 }
 
-func (self *BackDoor) pump() {
-	defer self.wg.Done()
-	self.coor.Start()
-	self.coor.Wait()
-}
-
-func (self *BackDoor) Start() error {
-	upstream, err := self.readSettings()
-	if err != nil {
-		return err
-	}
-	self.upstream = upstream
-
-	self.wg.Add(1)
-	go self.pump()
-	return nil
-}
-
-func (self *BackDoor) Reload() error {
+func (self *ServerHub) Reload() error {
 	Info("reload services")
 	upstream, err := self.readSettings()
 	if err != nil {
-		Error("back client reload failed:%v", err)
+		Error("server hub load config file failed:%v", err)
 		return err
 	}
 	self.upstream = upstream
 	return nil
 }
 
-func (self *BackDoor) Stop() {
+func (self *ServerHub) Start() error {
+	err := self.Reload()
+	if err != nil {
+		return err
+	}
+
+	self.Hub.Start()
+	return nil
 }
 
-func (self *BackDoor) Wait() {
-	self.wg.Wait()
-}
-
-func NewBackDoor(tunnel *Tunnel) Service {
-	backDoor := new(BackDoor)
-	backDoor.configFile = options.ConfigFile
-	backDoor.backAddr = options.TunnelAddr
-	backDoor.coor = NewCoor(tunnel, backDoor)
-	return backDoor
+func newServerHub(tunnel *Tunnel) *ServerHub {
+	return &ServerHub{newHub(tunnel), nil}
 }

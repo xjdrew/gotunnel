@@ -6,9 +6,8 @@
 package tunnel
 
 import (
-	"net"
-
 	"errors"
+	"net"
 )
 
 type TcpServer struct {

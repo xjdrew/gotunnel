@@ -12,47 +12,38 @@ import (
 
 type TunnelServer struct {
 	TcpServer
-	newDoor func(*Tunnel) Service
-	doors   map[Service]bool
-	wg      sync.WaitGroup
-	rw      sync.RWMutex
+	hubs map[*ServerHub]bool
+	wg   sync.WaitGroup
+	rw   sync.RWMutex
 }
 
-func (self *TunnelServer) addDoor(door Service) {
+func (self *TunnelServer) addHub(hub *ServerHub) {
 	self.rw.Lock()
-	self.doors[door] = true
+	self.hubs[hub] = true
 	self.rw.Unlock()
 }
 
-func (self *TunnelServer) removeDoor(door Service) {
+func (self *TunnelServer) removeHub(hub *ServerHub) {
 	self.rw.Lock()
-	delete(self.doors, door)
+	delete(self.hubs, hub)
 	self.rw.Unlock()
 }
 
 func (self *TunnelServer) handleClient(conn *net.TCPConn) {
-	defer conn.Close()
 	defer self.wg.Done()
-
-	// try skip tgw
-	err := skipTGW(conn)
-	if err != nil {
-		Error("skip tgw failed, source: %v", conn.RemoteAddr())
-		return
-	}
+	defer conn.Close()
 
 	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
-	tunnel := NewTunnel(conn)
-	door := self.newDoor(tunnel)
-	self.addDoor(door)
-	defer self.removeDoor(door)
+	hub := newServerHub(newTunnel(conn))
+	self.addHub(hub)
+	defer self.removeHub(hub)
 
-	err = door.Start()
+    err := hub.Start()
 	if err != nil {
-		Error("door start failed:%s", err.Error())
+		Error("hub start failed:%s", err.Error())
 		return
 	}
-	door.Wait()
+	hub.Wait()
 }
 
 func (self *TunnelServer) listen() {
@@ -90,8 +81,8 @@ func (self *TunnelServer) Reload() error {
 	self.rw.RLock()
 	defer self.rw.RUnlock()
 
-	for door := range self.doors {
-		door.Reload()
+	for hub := range self.hubs {
+		hub.Reload()
 	}
 	return nil
 }
@@ -102,13 +93,12 @@ func (self *TunnelServer) Stop() {
 
 func (self *TunnelServer) Wait() {
 	self.wg.Wait()
-	Error("back door quit")
+	Error("back hub quit")
 }
 
-func NewTunnelServer(newDoor func(*Tunnel) Service) *TunnelServer {
+func NewTunnelServer() *TunnelServer {
 	tunnelServer := new(TunnelServer)
-	tunnelServer.TcpServer.addr = options.TunnelAddr
-	tunnelServer.newDoor = newDoor
-	tunnelServer.doors = make(map[Service]bool)
+	tunnelServer.TcpServer.addr = options.Listen
+	tunnelServer.hubs = make(map[*ServerHub]bool)
 	return tunnelServer
 }

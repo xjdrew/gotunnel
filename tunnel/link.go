@@ -27,7 +27,7 @@ func (self *Link) setError(err error) {
 }
 
 // write data to peer
-func (self *Link) upload(coor *Coor) {
+func (self *Link) upload(hub *Hub) {
 	rd := bufio.NewReaderSize(self.conn, 4096)
 	for {
 		buffer := make([]byte, 4096)
@@ -37,7 +37,7 @@ func (self *Link) upload(coor *Coor) {
 			return
 		}
 		Debug("link(%d) read %d bytes:%s", self.id, n, string(buffer[:n]))
-		coor.SendLinkData(self.id, buffer[:n])
+		hub.SendLinkData(self.id, buffer[:n])
 	}
 }
 
@@ -60,13 +60,13 @@ func (self *Link) download(ch chan []byte) {
 	self.setError(errPeerClosed)
 }
 
-func (self *Link) Pump(coor *Coor, ch chan []byte) {
+func (self *Link) Pump(hub *Hub, ch chan []byte) {
 	go self.download(ch)
-	self.upload(coor)
+	self.upload(hub)
 
 	if self.err != errPeerClosed {
-		coor.Reset(self.id)
-		coor.SendLinkDestory(self.id)
+		hub.Reset(self.id)
+		hub.SendLinkDestory(self.id)
 		ch <- nil
 		Info("link(%d) closing: %v", self.id, self.err)
 	}

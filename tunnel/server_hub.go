@@ -15,8 +15,6 @@ import (
 type Host struct {
 	Addr   string
 	Weight int
-
-	addr *net.TCPAddr
 }
 
 type Upstream struct {
@@ -47,15 +45,10 @@ func (self *ServerHub) readSettings() (upstream *Upstream, err error) {
 
 	for i := range upstream.Hosts {
 		host := &upstream.Hosts[i]
-		host.addr, err = net.ResolveTCPAddr("tcp", host.Addr)
-		if err != nil {
-			Error("resolve local addr failed:%s", err.Error())
-			return
-		}
 		upstream.weight += host.Weight
 	}
 
-	Info("config:%v", upstream)
+	Log("config:%v", upstream)
 	return
 }
 
@@ -86,7 +79,7 @@ func (self *ServerHub) handleLink(linkid uint16, ch chan []byte) {
 		return
 	}
 
-	dest, err := net.DialTCP("tcp", nil, host.addr)
+	dest, err := net.Dial("tcp", host.Addr)
 	if err != nil {
 		Error("link(%d) connect to host failed, host:%s, err:%v", linkid, host.Addr, err)
 		self.Reset(linkid)
@@ -95,7 +88,7 @@ func (self *ServerHub) handleLink(linkid uint16, ch chan []byte) {
 	}
 
 	Info("link(%d) new connection to %v", linkid, dest.RemoteAddr())
-	link := NewLink(linkid, dest)
+	link := NewLink(linkid, dest.(*net.TCPConn))
 	link.Pump(self.Hub, ch)
 }
 

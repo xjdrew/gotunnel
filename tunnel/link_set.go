@@ -10,7 +10,7 @@ import (
 	"sync"
 )
 
-var IndexError = errors.New("index out of range")
+var IndexError = errors.New("index out of range or no data")
 var ConflictError = errors.New("linkid conflict")
 
 type LinkSet struct {
@@ -46,7 +46,7 @@ func (self *LinkSet) ReleaseId(linkid uint16) (err error) {
 	return
 }
 
-func (self *LinkSet) Set(linkid uint16, ch chan []byte) (err error) {
+func (self *LinkSet) Set(linkid uint16) (ch chan []byte, err error) {
 	if !self.isValidLinkid(linkid) {
 		err = IndexError
 		return
@@ -54,35 +54,51 @@ func (self *LinkSet) Set(linkid uint16, ch chan []byte) (err error) {
 
 	self.rw.Lock()
 	defer self.rw.Unlock()
+
 	if self.chs[linkid] != nil {
 		err = ConflictError
 		return
 	}
+
+	ch = make(chan []byte, 256)
 	self.chs[linkid] = ch
 	return
 }
 
-func (self *LinkSet) Reset(linkid uint16) (ch chan []byte, err error) {
+func (self *LinkSet) Reset(linkid uint16) (err error) {
 	if !self.isValidLinkid(linkid) {
 		err = IndexError
 		return
 	}
+
 	self.rw.Lock()
-	ch = self.chs[linkid]
-	self.chs[linkid] = nil
-	self.rw.Unlock()
+	defer self.rw.Unlock()
+
+	ch := self.chs[linkid]
+	if ch != nil {
+		close(ch)
+		self.chs[linkid] = nil
+	} else {
+		err = IndexError
+	}
 	return
 }
 
-func (self *LinkSet) Get(linkid uint16) (ch chan []byte, err error) {
+func (self *LinkSet) PutData(linkid uint16, data []byte) (err error) {
 	if !self.isValidLinkid(linkid) {
 		err = IndexError
 		return
 	}
 
 	self.rw.RLock()
-	ch = self.chs[linkid]
-	self.rw.RUnlock()
+	defer self.rw.RUnlock()
+
+	ch := self.chs[linkid]
+	if ch != nil {
+		ch <- data
+	} else {
+		err = IndexError
+	}
 	return
 }
 

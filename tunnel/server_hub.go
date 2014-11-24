@@ -70,6 +70,7 @@ func (self *ServerHub) chooseHost() (host *Host) {
 
 func (self *ServerHub) handleLink(linkid uint16, ch chan []byte) {
 	defer self.Hub.wg.Done()
+	defer Recover()
 
 	host := self.chooseHost()
 	if host == nil {
@@ -96,8 +97,7 @@ func (self *ServerHub) Ctrl(cmd *CmdPayload) bool {
 	linkid := cmd.Linkid
 	switch cmd.Cmd {
 	case LINK_CREATE:
-		ch := make(chan []byte, 256)
-		err := self.Set(linkid, ch)
+		ch, err := self.Set(linkid)
 		if err != nil {
 			Error("build link failed, linkid:%d, error:%s", linkid, err)
 			self.SendLinkDestory(linkid)

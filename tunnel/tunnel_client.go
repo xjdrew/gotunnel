@@ -29,15 +29,16 @@ func (self *TunnelClient) createHub() error {
 func (self *TunnelClient) handleClient(conn *net.TCPConn) {
 	defer self.wg.Done()
 	defer conn.Close()
+	defer Recover()
 
 	linkid := self.hub.AcquireId()
 	if linkid == 0 {
 		Error("alloc linkid failed, source: %v", conn.RemoteAddr())
 		return
 	}
+	defer self.hub.ReleaseId(linkid)
 
-	ch := make(chan []byte, 256)
-	err := self.hub.Set(linkid, ch)
+	ch, err := self.hub.Set(linkid)
 	if err != nil {
 		//impossible
 		Error("set link failed, linkid:%d, source: %v", linkid, conn.RemoteAddr())
@@ -46,7 +47,6 @@ func (self *TunnelClient) handleClient(conn *net.TCPConn) {
 
 	Info("link(%d) create link, source: %v", linkid, conn.RemoteAddr())
 
-	defer self.hub.ReleaseId(linkid)
 	self.hub.SendLinkCreate(linkid)
 
 	link := NewLink(linkid, conn)

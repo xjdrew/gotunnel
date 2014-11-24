@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime"
 )
 
 var logger *log.Logger
@@ -40,11 +41,19 @@ func Error(format string, a ...interface{}) {
 	}
 }
 
-func Panic(format string, a ...interface{}) {
-	_print(format, a...)
-	panic("!!")
-}
-
 func Log(format string, a ...interface{}) {
 	_print(format, a...)
+}
+
+func LogStack(format string, a ...interface{}) {
+	_print(format, a...)
+
+	buf := make([]byte, 8192)
+	runtime.Stack(buf, true)
+	_print("%s", buf)
+}
+
+func Panic(format string, a ...interface{}) {
+	LogStack(format, a...)
+	panic("!!")
 }

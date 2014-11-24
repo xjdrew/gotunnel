@@ -28,6 +28,7 @@ func (self *Link) setError(err error) {
 
 // write data to peer
 func (self *Link) upload(hub *Hub) {
+	defer self.conn.CloseRead()
 	rd := bufio.NewReaderSize(self.conn, 4096)
 	for {
 		buffer := make([]byte, 4096)
@@ -43,12 +44,9 @@ func (self *Link) upload(hub *Hub) {
 
 // read data from peer
 func (self *Link) download(ch chan []byte) {
-	defer self.conn.Close()
-	for data := range ch {
-		if len(data) == 0 {
-			break
-		}
+	defer self.conn.CloseWrite()
 
+	for data := range ch {
 		Debug("link(%d) write %d bytes:%s", self.id, len(data), string(data))
 		_, err := self.conn.Write(data)
 		if err != nil {
@@ -67,12 +65,13 @@ func (self *Link) Pump(hub *Hub, ch chan []byte) {
 	if self.err != errPeerClosed {
 		hub.Reset(self.id)
 		hub.SendLinkDestory(self.id)
-		ch <- nil
 		Info("link(%d) closing: %v", self.id, self.err)
 	}
 }
 
 func NewLink(id uint16, conn *net.TCPConn) *Link {
+	conn.SetKeepAlive(true)
+	conn.SetLinger(-1)
 	link := new(Link)
 	link.id = id
 	link.conn = conn

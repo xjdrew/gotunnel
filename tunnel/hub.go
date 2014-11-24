@@ -84,15 +84,10 @@ func (self *Hub) ctrl(cmd *CmdPayload) {
 
 	switch cmd.Cmd {
 	case LINK_DESTROY:
-		ch, err := self.Reset(linkid)
+		err := self.Reset(linkid)
 		if err != nil {
-			Error("link(%d) close failed, error:%v", linkid, err)
-			return
-		}
-
-		if ch != nil {
-			// close ch, don't write to ch again
-			ch <- nil
+			Info("link(%d) close failed: %v", linkid, err)
+		} else {
 			Info("link(%d) closed", linkid)
 		}
 	default:
@@ -104,21 +99,17 @@ func (self *Hub) data(payload *TunnelPayload) {
 	linkid := payload.Linkid
 	Debug("link(%d) recv data:%d", linkid, len(payload.Data))
 
-	ch, err := self.Get(linkid)
+	err := self.PutData(linkid, payload.Data)
 	if err != nil {
-		Error("link(%d) illegal link", linkid)
-		return
+		Error("link(%d) put data failed: %v", linkid, err)
 	}
-
-	if ch != nil {
-		ch <- payload.Data
-	} else {
-		Info("link(%d) drop data:%d", linkid, len(payload.Data))
-	}
+	return
 }
 
 func (self *Hub) dispatch() {
 	defer self.wg.Done()
+	defer Recover()
+
 	for {
 		payload := self.tunnel.Pop()
 		if payload == nil {
@@ -143,11 +134,15 @@ func (self *Hub) dispatch() {
 
 func (self *Hub) pumpOut() {
 	self.wg.Done()
+	defer Recover()
+
 	self.tunnel.PumpOut()
 }
 
 func (self *Hub) pumpUp() {
 	self.wg.Done()
+	defer Recover()
+
 	self.tunnel.PumpUp()
 }
 
@@ -171,9 +166,8 @@ func (self *Hub) Wait() {
 	Info("reset all link")
 	var i uint16 = 1
 	for ; i < options.Capacity; i++ {
-		ch, _ := self.Reset(i)
-		if ch != nil {
-			ch <- nil
+		err := self.Reset(i)
+		if err == nil {
 			Info("link(%d) closed", i)
 		}
 	}

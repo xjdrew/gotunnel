@@ -32,6 +32,7 @@ func (self *TunnelServer) removeHub(hub *ServerHub) {
 func (self *TunnelServer) handleClient(conn *net.TCPConn) {
 	defer self.wg.Done()
 	defer conn.Close()
+	defer Recover()
 
 	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
 	hub := newServerHub(newTunnel(conn))

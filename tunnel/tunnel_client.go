@@ -38,19 +38,10 @@ func (self *TunnelClient) handleClient(conn *net.TCPConn) {
 	}
 	defer self.hub.ReleaseId(linkid)
 
-	ch, err := self.hub.Set(linkid)
-	if err != nil {
-		//impossible
-		Error("set link failed, linkid:%d, source: %v", linkid, conn.RemoteAddr())
-		return
-	}
-
 	Info("link(%d) create link, source: %v", linkid, conn.RemoteAddr())
-
 	self.hub.SendLinkCreate(linkid)
-
 	link := NewLink(linkid, conn)
-	link.Pump(self.hub, ch)
+	link.Pump(self.hub)
 }
 
 func (self *TunnelClient) listen() {
@@ -58,7 +49,7 @@ func (self *TunnelClient) listen() {
 	for {
 		conn, err := self.accept()
 		if err != nil {
-			Log("front server acceept failed:%s", err.Error())
+			Log("acceept failed:%s", err.Error())
 			if opErr, ok := err.(*net.OpError); ok {
 				if !opErr.Temporary() {
 					break
@@ -66,7 +57,7 @@ func (self *TunnelClient) listen() {
 			}
 			continue
 		}
-		Info("front server, new connection from %v", conn.RemoteAddr())
+		Info("new connection from %v", conn.RemoteAddr())
 		self.wg.Add(1)
 		go self.handleClient(conn)
 	}

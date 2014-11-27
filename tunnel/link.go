@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"errors"
 	"net"
+	"sync"
 )
 
 var errPeerClosed = errors.New("errPeerClosed")
@@ -16,57 +17,64 @@ var errPeerClosed = errors.New("errPeerClosed")
 type Link struct {
 	id   uint16
 	conn *net.TCPConn
-	err  error
-}
-
-func (self *Link) setError(err error) {
-	if self.err != nil {
-		return
-	}
-	self.err = err
+	wg   sync.WaitGroup
 }
 
 // write data to peer
 func (self *Link) upload(hub *Hub) {
+	linkid := self.id
+
+	defer self.wg.Done()
 	defer self.conn.CloseRead()
+
 	rd := bufio.NewReaderSize(self.conn, 4096)
 	for {
 		buffer := make([]byte, 4096)
 		n, err := rd.Read(buffer)
 		if err != nil {
-			self.setError(err)
-			return
+			Debug("link(%d) read failed:%v", linkid, err)
+			hub.SendLinkCloseRead(linkid)
+			break
 		}
-		Debug("link(%d) read %d bytes:%s", self.id, n, string(buffer[:n]))
-		hub.SendLinkData(self.id, buffer[:n])
+		Debug("link(%d) read %d bytes:%s", linkid, n, string(buffer[:n]))
+		if !hub.SendLinkData(linkid, buffer[:n]) {
+			break
+		}
 	}
 }
 
 // read data from peer
-func (self *Link) download(ch chan []byte) {
+func (self *Link) download(hub *Hub) {
+	linkid := self.id
+
+	defer self.wg.Done()
 	defer self.conn.CloseWrite()
 
-	for data := range ch {
-		Debug("link(%d) write %d bytes:%s", self.id, len(data), string(data))
+	reader := hub.RecvLinkData(linkid)
+	for {
+		data, ok := reader()
+		if !ok {
+			break
+		}
 		_, err := self.conn.Write(data)
 		if err != nil {
-			self.setError(err)
-			return
+			Debug("link(%d) write failed:%v", linkid, err)
+			hub.SendLinkCloseWrite(self.id)
+			break
 		}
+		Debug("link(%d) write %d bytes:%s", self.id, len(data), string(data))
 	}
-	// receive LINK_DESTROY, so close conn
-	self.setError(errPeerClosed)
 }
 
-func (self *Link) Pump(hub *Hub, ch chan []byte) {
-	go self.download(ch)
-	self.upload(hub)
+func (self *Link) Pump(hub *Hub) {
+	self.wg.Add(1)
+	go self.download(hub)
 
-	if self.err != errPeerClosed {
-		hub.Reset(self.id)
-		hub.SendLinkDestory(self.id)
-		Info("link(%d) closing: %v", self.id, self.err)
-	}
+	self.wg.Add(1)
+	go self.upload(hub)
+
+	self.wg.Wait()
+	Info("link(%d) closed", self.id)
 }
 
 func NewLink(id uint16, conn *net.TCPConn) *Link {

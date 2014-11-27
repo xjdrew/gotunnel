@@ -68,7 +68,7 @@ func (self *ServerHub) chooseHost() (host *Host) {
 	return
 }
 
-func (self *ServerHub) handleLink(linkid uint16) {
+func (self *ServerHub) handleLink(linkid uint16, link *Link) {
 	defer self.Hub.wg.Done()
 	defer Recover()
 
@@ -87,8 +87,7 @@ func (self *ServerHub) handleLink(linkid uint16) {
 	}
 
 	Info("link(%d) new connection to %v", linkid, dest.RemoteAddr())
-	link := NewLink(linkid, dest.(*net.TCPConn))
-	link.Pump(self.Hub)
+	link.Pump(dest.(*net.TCPConn))
 }
 
 func (self *ServerHub) Ctrl(cmd *CmdPayload) bool {
@@ -98,7 +97,8 @@ func (self *ServerHub) Ctrl(cmd *CmdPayload) bool {
 		if self.setRWflag(linkid) {
 			Info("link(%d) build link", linkid)
 			self.Hub.wg.Add(1)
-			go self.handleLink(linkid)
+			link := self.NewLink(linkid)
+			go self.handleLink(linkid, link)
 		} else {
 			Error("link(%d) id conflict", linkid)
 			self.SendLinkClose(linkid)

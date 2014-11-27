@@ -27,7 +27,7 @@ usage: bin/gotunnel [configFile]
   -server="": server address, empty if work as server
 ```
 
-#### useage
+## useage
 ```bash
 $ source env.sh
 $ go build github.com/xjdrew/gotunnel

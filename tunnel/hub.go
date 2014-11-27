@@ -73,10 +73,6 @@ func (self *Hub) SendLinkData(linkid uint16, data []byte) bool {
 	return false
 }
 
-func (self *Hub) RecvLinkData(linkid uint16) func() ([]byte, bool) {
-	return self.getDataReader(linkid)
-}
-
 func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) {
 	payload := new(TunnelPayload)
 	switch cmd {
@@ -193,6 +189,11 @@ func (self *Hub) Wait() {
 		self.resetRWflag(i)
 	}
 	Log("hub(%s) quit", self.tunnel.String())
+}
+
+func (self *Hub) NewLink(linkid uint16) *Link {
+	// must get reader before dispatch other cmd except LINK_CREATE
+	return newLink(linkid, self, self.getDataReader(linkid))
 }
 
 func newHub(tunnel *Tunnel) *Hub {

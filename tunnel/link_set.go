@@ -56,13 +56,18 @@ func (self *LinkSet) resetRflag(linkid uint16, dropall bool) bool {
 
 	if dropall {
 		// drop all pending data
+		total := 0
 	Loop:
 		for {
 			select {
 			case <-ch:
+				total += 1
 			default:
 				break Loop
 			}
+		}
+		if total > 0 {
+			Info("link(%d) drop %d chunks", total)
 		}
 	}
 	close(ch)

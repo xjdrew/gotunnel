@@ -40,8 +40,8 @@ func (self *TunnelClient) handleClient(conn *net.TCPConn) {
 
 	Info("link(%d) create link, source: %v", linkid, conn.RemoteAddr())
 	self.hub.SendLinkCreate(linkid)
-	link := NewLink(linkid, conn)
-	link.Pump(self.hub)
+	link := self.hub.NewLink(linkid)
+	link.Pump(conn)
 }
 
 func (self *TunnelClient) listen() {

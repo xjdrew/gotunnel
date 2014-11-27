@@ -27,14 +27,23 @@ usage: bin/gotunnel [configFile]
   -server="": server address, empty if work as server
 ```
 
-#### launch tunnel server
+#### useage
+```bash
+$ source env.sh
+$ go build github.com/xjdrew/gotunnel
+$ go build src/github.com/xjdrew/gotunnel/tests/sender.go
+$ go build src/github.com/xjdrew/gotunnel/tests/receiver.go
 
-```
-./gotunnel setting.conf
-```
+# launch tunnel server
+$ ./gotunnel -log=10 src/github.com/xjdrew/gotunnel/tests/test.conf
 
-#### launch tunnel client
-```
-./gotunnel -server="127.0.0.1:8001" -listen=":8002"
+# launch tunnel client
+$ ./gotunnel -log=10 -listen=":8003" -server="127.0.0.1:8001"
+
+# launch receiver
+$ ./receiver
+
+# lauch sender
+$ ./sender -remote=127.0.0.1:8003
 ```
 

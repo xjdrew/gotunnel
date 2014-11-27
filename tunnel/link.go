@@ -15,13 +15,15 @@ import (
 var errPeerClosed = errors.New("errPeerClosed")
 
 type Link struct {
-	id   uint16
-	conn *net.TCPConn
-	wg   sync.WaitGroup
+	id     uint16
+	hub    *Hub
+	conn   *net.TCPConn
+	reader func() ([]byte, bool)
+	wg     sync.WaitGroup
 }
 
 // write data to peer
-func (self *Link) upload(hub *Hub) {
+func (self *Link) upload() {
 	linkid := self.id
 
 	defer self.wg.Done()
@@ -33,55 +35,57 @@ func (self *Link) upload(hub *Hub) {
 		n, err := rd.Read(buffer)
 		if err != nil {
 			Debug("link(%d) read failed:%v", linkid, err)
-			hub.SendLinkCloseRead(linkid)
+			self.hub.SendLinkCloseRead(linkid)
 			break
 		}
 		Debug("link(%d) read %d bytes:%s", linkid, n, string(buffer[:n]))
-		if !hub.SendLinkData(linkid, buffer[:n]) {
+		if !self.hub.SendLinkData(linkid, buffer[:n]) {
 			break
 		}
 	}
 }
 
 // read data from peer
-func (self *Link) download(hub *Hub) {
+func (self *Link) download() {
 	linkid := self.id
 
 	defer self.wg.Done()
 	defer self.conn.CloseWrite()
 
-	reader := hub.RecvLinkData(linkid)
 	for {
-		data, ok := reader()
+		data, ok := self.reader()
 		if !ok {
 			break
 		}
 		_, err := self.conn.Write(data)
 		if err != nil {
 			Debug("link(%d) write failed:%v", linkid, err)
-			hub.SendLinkCloseWrite(self.id)
+			self.hub.SendLinkCloseWrite(self.id)
 			break
 		}
 		Debug("link(%d) write %d bytes:%s", self.id, len(data), string(data))
 	}
 }
 
-func (self *Link) Pump(hub *Hub) {
-	self.wg.Add(1)
-	go self.download(hub)
+func (self *Link) Pump(conn *net.TCPConn) {
+	conn.SetKeepAlive(true)
+	conn.SetLinger(-1)
+	self.conn = conn
 
 	self.wg.Add(1)
-	go self.upload(hub)
+	go self.download()
+
+	self.wg.Add(1)
+	go self.upload()
 
 	self.wg.Wait()
 	Info("link(%d) closed", self.id)
 }
 
-func NewLink(id uint16, conn *net.TCPConn) *Link {
-	conn.SetKeepAlive(true)
-	conn.SetLinger(-1)
+func newLink(id uint16, hub *Hub, reader func() ([]byte, bool)) *Link {
 	link := new(Link)
 	link.id = id
-	link.conn = conn
+	link.hub = hub
+	link.reader = reader
 	return link
 }

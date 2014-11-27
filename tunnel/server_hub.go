@@ -68,43 +68,40 @@ func (self *ServerHub) chooseHost() (host *Host) {
 	return
 }
 
-func (self *ServerHub) handleLink(linkid uint16, ch chan []byte) {
+func (self *ServerHub) handleLink(linkid uint16) {
 	defer self.Hub.wg.Done()
 	defer Recover()
 
 	host := self.chooseHost()
 	if host == nil {
 		Error("link(%d) choose host failed", linkid)
-		self.Reset(linkid)
-		self.SendLinkDestory(linkid)
+		self.SendLinkClose(linkid)
 		return
 	}
 
 	dest, err := net.Dial("tcp", host.Addr)
 	if err != nil {
 		Error("link(%d) connect to host failed, host:%s, err:%v", linkid, host.Addr, err)
-		self.Reset(linkid)
-		self.SendLinkDestory(linkid)
+		self.SendLinkClose(linkid)
 		return
 	}
 
 	Info("link(%d) new connection to %v", linkid, dest.RemoteAddr())
 	link := NewLink(linkid, dest.(*net.TCPConn))
-	link.Pump(self.Hub, ch)
+	link.Pump(self.Hub)
 }
 
 func (self *ServerHub) Ctrl(cmd *CmdPayload) bool {
 	linkid := cmd.Linkid
 	switch cmd.Cmd {
 	case LINK_CREATE:
-		ch, err := self.Set(linkid)
-		if err != nil {
-			Error("build link failed, linkid:%d, error:%s", linkid, err)
-			self.SendLinkDestory(linkid)
-		} else {
+		if self.setRWflag(linkid) {
 			Info("link(%d) build link", linkid)
 			self.Hub.wg.Add(1)
-			go self.handleLink(linkid, ch)
+			go self.handleLink(linkid)
+		} else {
+			Error("link(%d) id conflict", linkid)
+			self.SendLinkClose(linkid)
 		}
 		return true
 	}

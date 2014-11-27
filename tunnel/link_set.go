@@ -5,26 +5,11 @@
 
 package tunnel
 
-import (
-	"errors"
-	"sync"
-)
-
-var IndexError = errors.New("index out of range or no data")
-var ConflictError = errors.New("linkid conflict")
-
 type LinkSet struct {
 	capacity   uint16
-	chs        []chan []byte
+	rchs       []chan []byte //read channel
+	wflags     []bool        //write flag
 	freeLinkid chan uint16
-	rw         sync.RWMutex
-}
-
-func (self *LinkSet) isValidLinkid(linkid uint16) bool {
-	if 0 < linkid && linkid < self.capacity {
-		return true
-	}
-	return false
 }
 
 func (self *LinkSet) AcquireId() uint16 {
@@ -37,69 +22,75 @@ func (self *LinkSet) AcquireId() uint16 {
 	return linkid
 }
 
-func (self *LinkSet) ReleaseId(linkid uint16) (err error) {
-	if !self.isValidLinkid(linkid) {
-		err = IndexError
-		return
-	}
+func (self *LinkSet) ReleaseId(linkid uint16) {
 	self.freeLinkid <- linkid
-	return
 }
 
-func (self *LinkSet) Set(linkid uint16) (ch chan []byte, err error) {
-	if !self.isValidLinkid(linkid) {
-		err = IndexError
-		return
+func (self *LinkSet) setRWflag(linkid uint16) bool {
+	if self.rchs[linkid] != nil || self.wflags[linkid] {
+		return false
 	}
-
-	self.rw.Lock()
-	defer self.rw.Unlock()
-
-	if self.chs[linkid] != nil {
-		err = ConflictError
-		return
-	}
-
-	ch = make(chan []byte, 256)
-	self.chs[linkid] = ch
-	return
+	self.rchs[linkid] = make(chan []byte, 256)
+	self.wflags[linkid] = true
+	return true
 }
 
-func (self *LinkSet) Reset(linkid uint16) (err error) {
-	if !self.isValidLinkid(linkid) {
-		err = IndexError
-		return
-	}
-
-	self.rw.Lock()
-	defer self.rw.Unlock()
-
-	ch := self.chs[linkid]
-	if ch != nil {
-		close(ch)
-		self.chs[linkid] = nil
-	} else {
-		err = IndexError
-	}
-	return
+// stop write data to remote
+func (self *LinkSet) resetWflag(linkid uint16) bool {
+	flag := self.wflags[linkid]
+	self.wflags[linkid] = false
+	return flag
 }
 
-func (self *LinkSet) PutData(linkid uint16, data []byte) (err error) {
-	if !self.isValidLinkid(linkid) {
-		err = IndexError
-		return
+func (self *LinkSet) getWflag(linkid uint16) bool {
+	return self.wflags[linkid]
+}
+
+// stop recv data from remote
+func (self *LinkSet) resetRflag(linkid uint16, dropall bool) bool {
+	ch := self.rchs[linkid]
+	if ch == nil {
+		return false
+	}
+	self.rchs[linkid] = nil
+
+	if dropall {
+		// drop all pending data
+	Loop:
+		for {
+			select {
+			case <-ch:
+			default:
+				break Loop
+			}
+		}
+	}
+	close(ch)
+	return true
+}
+
+func (self *LinkSet) resetRWflag(linkid uint16) bool {
+	ok1 := self.resetWflag(linkid)
+	ok2 := self.resetRflag(linkid, true)
+	return ok1 || ok2
+}
+
+func (self *LinkSet) putData(linkid uint16, data []byte) bool {
+	ch := self.rchs[linkid]
+	if ch == nil {
+		return false
 	}
 
-	self.rw.RLock()
-	defer self.rw.RUnlock()
+	ch <- data
+	return true
+}
 
-	ch := self.chs[linkid]
-	if ch != nil {
-		ch <- data
-	} else {
-		err = IndexError
+func (self *LinkSet) getDataReader(linkid uint16) func() ([]byte, bool) {
+	ch := self.rchs[linkid]
+	return func() ([]byte, bool) {
+		data, ok := <-ch
+		return data, ok
 	}
-	return
 }
 
 func newLinkSet() *LinkSet {
@@ -113,6 +104,7 @@ func newLinkSet() *LinkSet {
 	linkset := new(LinkSet)
 	linkset.capacity = capacity
 	linkset.freeLinkid = freeLinkid
-	linkset.chs = make([]chan []byte, capacity)
+	linkset.rchs = make([]chan []byte, capacity)
+	linkset.wflags = make([]bool, capacity)
 	return linkset
 }

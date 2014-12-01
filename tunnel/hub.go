@@ -15,8 +15,8 @@ const (
 	LINK_DATA uint8 = iota
 	LINK_CREATE
 	LINK_CLOSE
-	LINK_CLOSE_READ
-	LINK_CLOSE_WRITE
+	LINK_CLOSE_RECV
+	LINK_CLOSE_SEND
 )
 
 type CmdPayload struct {
@@ -38,39 +38,6 @@ type Hub struct {
 
 func (self *Hub) SetCtrlDelegate(delegate CtrlDelegate) {
 	self.delegate = delegate
-}
-
-func (self *Hub) SendLinkCreate(linkid uint16) {
-	if self.setRWflag(linkid) {
-		self.Send(LINK_CREATE, linkid, nil)
-	} else {
-		Panic("link(%d) conflict", linkid)
-	}
-}
-
-func (self *Hub) SendLinkCloseRead(linkid uint16) {
-	if self.resetWflag(linkid) {
-		self.Send(LINK_CLOSE_READ, linkid, nil)
-	}
-}
-
-func (self *Hub) SendLinkCloseWrite(linkid uint16) {
-	if self.resetRflag(linkid, true) {
-		self.Send(LINK_CLOSE_WRITE, linkid, nil)
-	}
-}
-
-func (self *Hub) SendLinkClose(linkid uint16) {
-	self.resetRWflag(linkid)
-	self.Send(LINK_CLOSE, linkid, nil)
-}
-
-func (self *Hub) SendLinkData(linkid uint16, data []byte) bool {
-	if self.getWflag(linkid) {
-		self.Send(LINK_DATA, linkid, data)
-		return true
-	}
-	return false
 }
 
 func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) {
@@ -98,21 +65,27 @@ func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) {
 
 func (self *Hub) ctrl(cmd *CmdPayload) {
 	linkid := cmd.Linkid
-	Debug("link(%d) recv cmd:%d", linkid, cmd.Cmd)
+	Info("link(%d) recv cmd:%d", linkid, cmd.Cmd)
 
 	if self.delegate != nil && self.delegate.Ctrl(cmd) {
 		return
 	}
 
+	link := self.getLink(linkid)
+	if link == nil {
+		Error("link(%d) recv cmd:%d, no link", linkid, cmd.Cmd)
+		return
+	}
+
 	switch cmd.Cmd {
 	case LINK_CLOSE:
-		self.resetRWflag(linkid)
-	case LINK_CLOSE_READ:
-		self.resetRflag(linkid, false)
-	case LINK_CLOSE_WRITE:
-		self.resetWflag(linkid)
+		link.resetRSflag()
+	case LINK_CLOSE_RECV:
+		link.resetSflag()
+	case LINK_CLOSE_SEND:
+		link.resetRflag(false)
 	default:
-		Error("receive unknown cmd:%v", cmd)
+		Error("link(%d) receive unknown cmd:%v", linkid, cmd)
 	}
 }
 
@@ -120,7 +93,13 @@ func (self *Hub) data(payload *TunnelPayload) {
 	linkid := payload.Linkid
 	Debug("link(%d) recv data:%d", linkid, len(payload.Data))
 
-	if !self.putData(linkid, payload.Data) {
+	link := self.getLink(linkid)
+	if link == nil {
+		Error("link(%d) no link", linkid)
+		return
+	}
+
+	if !link.putData(payload.Data) {
 		Error("link(%d) put data failed", linkid)
 	}
 	return
@@ -186,14 +165,24 @@ func (self *Hub) Wait() {
 	Info("reset all link")
 	var i uint16 = 1
 	for ; i < options.Capacity; i++ {
-		self.resetRWflag(i)
+		link := self.getLink(i)
+		if link != nil {
+			link.resetSflag()
+		}
 	}
 	Log("hub(%s) quit", self.tunnel.String())
 }
 
 func (self *Hub) NewLink(linkid uint16) *Link {
-	// must get reader before dispatch other cmd except LINK_CREATE
-	return newLink(linkid, self, self.getDataReader(linkid))
+	link := newLink(linkid, self)
+	if self.setLink(linkid, link) {
+		return link
+	}
+	return nil
+}
+
+func (self *Hub) ReleaseLink(linkid uint16) bool {
+	return self.resetLink(linkid)
 }
 
 func newHub(tunnel *Tunnel) *Hub {

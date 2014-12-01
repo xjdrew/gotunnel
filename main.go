@@ -55,7 +55,7 @@ func argsCheck() *tunnel.Options {
 	flag.Usage = usage
 	flag.Parse()
 
-	options.Capacity = 65535
+	options.Capacity = 10240
 	options.Rc4Key = []byte(rc4Key)
 
 	if len(options.Rc4Key) > 256 {

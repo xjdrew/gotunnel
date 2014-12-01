@@ -70,19 +70,20 @@ func (self *ServerHub) chooseHost() (host *Host) {
 
 func (self *ServerHub) handleLink(linkid uint16, link *Link) {
 	defer self.Hub.wg.Done()
+	defer self.Hub.ReleaseLink(linkid)
 	defer Recover()
 
 	host := self.chooseHost()
 	if host == nil {
 		Error("link(%d) choose host failed", linkid)
-		self.SendLinkClose(linkid)
+		link.SendClose()
 		return
 	}
 
 	dest, err := net.Dial("tcp", host.Addr)
 	if err != nil {
 		Error("link(%d) connect to host failed, host:%s, err:%v", linkid, host.Addr, err)
-		self.SendLinkClose(linkid)
+		link.SendClose()
 		return
 	}
 
@@ -94,14 +95,14 @@ func (self *ServerHub) Ctrl(cmd *CmdPayload) bool {
 	linkid := cmd.Linkid
 	switch cmd.Cmd {
 	case LINK_CREATE:
-		if self.setRWflag(linkid) {
+		link := self.NewLink(linkid)
+		if link != nil {
 			Info("link(%d) build link", linkid)
 			self.Hub.wg.Add(1)
-			link := self.NewLink(linkid)
 			go self.handleLink(linkid, link)
 		} else {
 			Error("link(%d) id conflict", linkid)
-			self.SendLinkClose(linkid)
+			self.Send(LINK_CLOSE, linkid, nil)
 		}
 		return true
 	}

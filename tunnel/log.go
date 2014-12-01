@@ -50,7 +50,7 @@ func LogStack(format string, a ...interface{}) {
 
 	buf := make([]byte, 8192)
 	runtime.Stack(buf, true)
-	_print("%s", buf)
+	_print("!!!!!statck!!!!!: %s", buf)
 }
 
 func Panic(format string, a ...interface{}) {

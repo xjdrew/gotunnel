@@ -83,7 +83,7 @@ func (self *Hub) ctrl(cmd *CmdPayload) {
 	case LINK_CLOSE_RECV:
 		link.resetSflag()
 	case LINK_CLOSE_SEND:
-		link.resetRflag(false)
+		link.resetRflag()
 	default:
 		Error("link(%d) receive unknown cmd:%v", linkid, cmd)
 	}

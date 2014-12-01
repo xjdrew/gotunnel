@@ -7,7 +7,6 @@ package tunnel
 
 import (
 	"bufio"
-	"bytes"
 	"errors"
 	"net"
 	"sync"
@@ -16,15 +15,12 @@ import (
 var errPeerClosed = errors.New("errPeerClosed")
 
 type Link struct {
-	id     uint16
-	hub    *Hub
-	conn   *net.TCPConn
-	reader func() ([]byte, bool)
+	id   uint16
+	hub  *Hub
+	conn *net.TCPConn
 
-	rch     chan []byte  // 读channel
-	rbuffer bytes.Buffer // 读buffer
-	rlock   sync.Mutex   // 读buffer locker
-	sflag   bool         // 是否可写
+	rbuffer *LinkBuffer // 接收缓存
+	sflag   bool        // 对端是否可以收数据
 
 	wg sync.WaitGroup
 }
@@ -39,43 +35,18 @@ func (self *Link) resetSflag() bool {
 }
 
 // stop recv data from remote
-func (self *Link) resetRflag(dropall bool) bool {
-	ch := self.rch
-	if ch == nil {
-		return false
-	}
-	self.rch = nil
-
-	if dropall {
-		// drop all pending data
-	Loop:
-		for {
-			select {
-			case <-ch:
-				Info("link(%d) drop data", self.id)
-			default:
-				break Loop
-			}
-		}
-	}
-	close(ch)
-	return true
+func (self *Link) resetRflag() bool {
+	return self.rbuffer.Close()
 }
 
 func (self *Link) resetRSflag() bool {
 	ok1 := self.resetSflag()
-	ok2 := self.resetRflag(true)
+	ok2 := self.resetRflag()
 	return ok1 || ok2
 }
 
 func (self *Link) putData(data []byte) bool {
-	ch := self.rch
-	if ch == nil {
-		return false
-	}
-
-	ch <- data
-	return true
+	return self.rbuffer.Put(data)
 }
 
 func (self *Link) SendCreate() {
@@ -121,13 +92,13 @@ func (self *Link) recv() {
 	defer self.conn.CloseWrite()
 
 	for {
-		data, ok := self.reader()
+		data, ok := self.rbuffer.Pop()
 		if !ok {
 			break
 		}
 		_, err := self.conn.Write(data)
 		if err != nil {
-			if self.resetRflag(true) {
+			if self.resetRflag() {
 				self.hub.Send(LINK_CLOSE_RECV, self.id, nil)
 			}
 			Debug("link(%d) write failed:%v", self.id, err)
@@ -157,12 +128,7 @@ func newLink(id uint16, hub *Hub) *Link {
 	link.id = id
 	link.hub = hub
 
-	ch := make(chan []byte, 256)
-	link.rch = ch
-	link.reader = func() ([]byte, bool) {
-		data, ok := <-ch
-		return data, ok
-	}
+	link.rbuffer = NewLinkBuffer(16)
 	link.sflag = true
 	return link
 }

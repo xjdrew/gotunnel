@@ -39,8 +39,10 @@ func (self *TunnelClient) handleClient(conn *net.TCPConn) {
 	defer self.hub.ReleaseId(linkid)
 
 	Info("link(%d) create link, source: %v", linkid, conn.RemoteAddr())
-	self.hub.SendLinkCreate(linkid)
 	link := self.hub.NewLink(linkid)
+	defer self.hub.ReleaseLink(linkid)
+
+	link.SendCreate()
 	link.Pump(conn)
 }
 

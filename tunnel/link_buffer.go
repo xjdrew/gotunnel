@@ -86,9 +86,7 @@ func (b *LinkBuffer) Pop() (data []byte, ok bool) {
 }
 
 func NewLinkBuffer(sz int) *LinkBuffer {
-	buffer := new(LinkBuffer)
-	buffer.ch = make(chan []byte)
-	buf := make([][]byte, sz)
-	buffer.buf = buf[0:0]
-	return buffer
+	return &LinkBuffer{
+		ch:  make(chan []byte),
+		buf: make([][]byte, sz)[0:0]}
 }

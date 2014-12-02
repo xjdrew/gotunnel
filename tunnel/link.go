@@ -15,20 +15,21 @@ import (
 var errPeerClosed = errors.New("errPeerClosed")
 
 type Link struct {
-	id   uint16
-	hub  *Hub
-	conn *net.TCPConn
-
-	rbuffer *LinkBuffer // 接收缓存
-	sflag   bool        // 对端是否可以收数据
-
-	wg sync.WaitGroup
+	id    uint16
+	hub   *Hub
+	conn  *net.TCPConn
+	rbuf  *LinkBuffer // 接收缓存
+	sflag bool        // 对端是否可以收数据
+	qos   *Qos
+	wg    sync.WaitGroup
 }
 
 // stop write data to remote
 func (self *Link) resetSflag() bool {
 	if self.sflag {
 		self.sflag = false
+		// close read
+		self.conn.CloseRead()
 		return true
 	}
 	return false
@@ -36,17 +37,20 @@ func (self *Link) resetSflag() bool {
 
 // stop recv data from remote
 func (self *Link) resetRflag() bool {
-	return self.rbuffer.Close()
+	self.qos.Close()
+	return self.rbuf.Close()
 }
 
+// peer link closed
 func (self *Link) resetRSflag() bool {
 	ok1 := self.resetSflag()
 	ok2 := self.resetRflag()
 	return ok1 || ok2
 }
 
-func (self *Link) putData(data []byte) bool {
-	return self.rbuffer.Put(data)
+// set remote qos flag
+func (self *Link) setRemoteQosFlag(flag bool) {
+	self.qos.SetRemoteFlag(flag)
 }
 
 func (self *Link) SendCreate() {
@@ -58,25 +62,42 @@ func (self *Link) SendClose() {
 	self.hub.Send(LINK_CLOSE, self.id, nil)
 }
 
-// write data to peer
-func (self *Link) send() {
-	linkid := self.id
+func (self *Link) putData(data []byte) bool {
+	ok := self.rbuf.Put(data)
+	if ok {
+		self.qos.SetWater(self.rbuf.Len())
+	}
+	return ok
+}
 
+func (self *Link) popData() (data []byte, ok bool) {
+	data, ok = self.rbuf.Pop()
+	if ok {
+		self.qos.SetWater(self.rbuf.Len())
+	}
+	return
+}
+
+// read from link
+func (self *Link) pumpIn() {
 	defer self.wg.Done()
 	defer self.conn.CloseRead()
 
 	rd := bufio.NewReaderSize(self.conn, 4096)
 	for {
+		// qos balance
+		self.qos.Balance()
+
 		buffer := make([]byte, 4096)
 		n, err := rd.Read(buffer)
 		if err != nil {
 			if self.resetSflag() {
 				self.hub.Send(LINK_CLOSE_SEND, self.id, nil)
 			}
-			Debug("link(%d) read failed:%v", linkid, err)
+			Debug("link(%d) read failed:%v", self.id, err)
 			break
 		}
-		Debug("link(%d) read %d bytes:%s", linkid, n, string(buffer[:n]))
+		Debug("link(%d) read %d bytes:%s", self.id, n, string(buffer[:n]))
 
 		if !self.sflag {
 			// receive LINK_CLOSE_WRITE
@@ -86,13 +107,13 @@ func (self *Link) send() {
 	}
 }
 
-// read data from peer
-func (self *Link) recv() {
+// write to link
+func (self *Link) pumpOut() {
 	defer self.wg.Done()
 	defer self.conn.CloseWrite()
 
 	for {
-		data, ok := self.rbuffer.Pop()
+		data, ok := self.popData()
 		if !ok {
 			break
 		}
@@ -114,21 +135,26 @@ func (self *Link) Pump(conn *net.TCPConn) {
 	self.conn = conn
 
 	self.wg.Add(1)
-	go self.recv()
+	go self.pumpIn()
 
 	self.wg.Add(1)
-	go self.send()
+	go self.pumpOut()
 
 	self.wg.Wait()
 	Info("link(%d) closed", self.id)
 }
 
 func newLink(id uint16, hub *Hub) *Link {
-	link := new(Link)
-	link.id = id
-	link.hub = hub
-
-	link.rbuffer = NewLinkBuffer(16)
-	link.sflag = true
-	return link
+	return &Link{
+		id:   id,
+		hub:  hub,
+		rbuf: NewLinkBuffer(16),
+		qos: NewQos(options.RbufHw, options.RbufLw, func() {
+			hub.Send(LINK_RECVBUF_HW, id, nil)
+			Error("link(%d) enter high water", id)
+		}, func() {
+			hub.Send(LINK_RECVBUF_LW, id, nil)
+			Error("link(%d) leave high water", id)
+		}),
+		sflag: true}
 }

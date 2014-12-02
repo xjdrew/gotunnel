@@ -11,7 +11,7 @@ import (
 )
 
 type TunnelServer struct {
-	TcpServer
+	ln   net.Listener
 	hubs map[*ServerHub]bool
 	wg   sync.WaitGroup
 	rw   sync.RWMutex
@@ -29,7 +29,7 @@ func (self *TunnelServer) removeHub(hub *ServerHub) {
 	self.rw.Unlock()
 }
 
-func (self *TunnelServer) handleClient(conn *net.TCPConn) {
+func (self *TunnelServer) handleConn(conn *net.TCPConn) {
 	defer self.wg.Done()
 	defer conn.Close()
 	defer Recover()
@@ -50,8 +50,14 @@ func (self *TunnelServer) handleClient(conn *net.TCPConn) {
 func (self *TunnelServer) listen() {
 	defer self.wg.Done()
 
+	var err error
+	self.ln, err = net.Listen("tcp", options.Listen)
+	if err != nil {
+		Panic("listen failed:%v", err)
+	}
+
 	for {
-		conn, err := self.accept()
+		conn, err := self.ln.Accept()
 		if err != nil {
 			Error("back server acceept failed:%s", err.Error())
 			if opErr, ok := err.(*net.OpError); ok {
@@ -63,16 +69,11 @@ func (self *TunnelServer) listen() {
 		}
 		Debug("back server, new connection from %v", conn.RemoteAddr())
 		self.wg.Add(1)
-		go self.handleClient(conn)
+		go self.handleConn(conn.(*net.TCPConn))
 	}
 }
 
 func (self *TunnelServer) Start() error {
-	err := self.buildListener()
-	if err != nil {
-		return err
-	}
-
 	self.wg.Add(1)
 	go self.listen()
 	return nil
@@ -89,7 +90,7 @@ func (self *TunnelServer) Reload() error {
 }
 
 func (self *TunnelServer) Stop() {
-	self.closeListener()
+	self.ln.Close()
 }
 
 func (self *TunnelServer) Wait() {
@@ -98,8 +99,6 @@ func (self *TunnelServer) Wait() {
 }
 
 func NewTunnelServer() *TunnelServer {
-	tunnelServer := new(TunnelServer)
-	tunnelServer.TcpServer.addr = options.Listen
-	tunnelServer.hubs = make(map[*ServerHub]bool)
-	return tunnelServer
+	return &TunnelServer{
+		hubs: make(map[*ServerHub]bool)}
 }

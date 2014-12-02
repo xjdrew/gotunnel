@@ -11,7 +11,7 @@ import (
 )
 
 type TunnelClient struct {
-	TcpServer
+	ln  net.Listener
 	hub *Hub
 	wg  sync.WaitGroup
 }
@@ -26,7 +26,7 @@ func (self *TunnelClient) createHub() error {
 	return err
 }
 
-func (self *TunnelClient) handleClient(conn *net.TCPConn) {
+func (self *TunnelClient) handleConn(conn *net.TCPConn) {
 	defer self.wg.Done()
 	defer conn.Close()
 	defer Recover()
@@ -48,8 +48,15 @@ func (self *TunnelClient) handleClient(conn *net.TCPConn) {
 
 func (self *TunnelClient) listen() {
 	defer self.wg.Done()
+
+	var err error
+	self.ln, err = net.Listen("tcp", options.Listen)
+	if err != nil {
+		Panic("listen failed:%v", err)
+	}
+
 	for {
-		conn, err := self.accept()
+		conn, err := self.ln.Accept()
 		if err != nil {
 			Log("acceept failed:%s", err.Error())
 			if opErr, ok := err.(*net.OpError); ok {
@@ -61,7 +68,7 @@ func (self *TunnelClient) listen() {
 		}
 		Info("new connection from %v", conn.RemoteAddr())
 		self.wg.Add(1)
-		go self.handleClient(conn)
+		go self.handleConn(conn.(*net.TCPConn))
 	}
 }
 
@@ -71,11 +78,6 @@ func (self *TunnelClient) Start() error {
 		return err
 	}
 	self.hub.Start()
-
-	err = self.buildListener()
-	if err != nil {
-		return err
-	}
 
 	self.wg.Add(1)
 	go self.listen()
@@ -87,7 +89,7 @@ func (self *TunnelClient) Reload() error {
 }
 
 func (self *TunnelClient) Stop() {
-	self.closeListener()
+	self.ln.Close()
 	self.hub.Close()
 	Log("close tunnel client")
 }
@@ -99,7 +101,5 @@ func (self *TunnelClient) Wait() {
 }
 
 func NewTunnelClient() *TunnelClient {
-	tunnelClient := new(TunnelClient)
-	tunnelClient.TcpServer.addr = options.Listen
-	return tunnelClient
+	return &TunnelClient{}
 }

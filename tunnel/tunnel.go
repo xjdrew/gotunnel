@@ -44,7 +44,7 @@ func (self *Tunnel) Pop() *TunnelPayload {
 }
 
 // read from tunnel
-func (self *Tunnel) PumpOut() (err error) {
+func (self *Tunnel) PumpIn() (err error) {
 	defer close(self.outputCh)
 
 	var header struct {
@@ -81,7 +81,7 @@ func (self *Tunnel) PumpOut() (err error) {
 }
 
 // write to tunnel
-func (self *Tunnel) PumpUp() (err error) {
+func (self *Tunnel) PumpOut() (err error) {
 	var header struct {
 		Linkid uint16
 		Sz     uint16

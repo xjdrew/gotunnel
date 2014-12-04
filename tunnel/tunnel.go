@@ -60,19 +60,25 @@ func (self *Tunnel) PumpIn() (err error) {
 			return
 		}
 
-		var data []byte
+		if header.Sz > options.PacketSize {
+			Error("too long packet:%d", header.Sz)
+			return
+		}
 
-		// if header.Sz == 0, it's ok too
-		data = make([]byte, header.Sz)
-		c := 0
-		for c < int(header.Sz) {
-			var n int
-			n, err = rd.Read(data[c:])
-			if err != nil {
-				Error("read tunnel failed:%s", err.Error())
-				return
+		var data []byte
+		if header.Sz > 0 {
+			data = mpool.Get()[0:header.Sz]
+			c := 0
+			for c < int(header.Sz) {
+				var n int
+				n, err = rd.Read(data[c:])
+				if err != nil {
+					mpool.Put(data)
+					Error("read tunnel failed:%s", err.Error())
+					return
+				}
+				c += n
 			}
-			c += n
 		}
 
 		self.outputCh <- &TunnelPayload{header.Linkid, data}
@@ -92,7 +98,7 @@ func (self *Tunnel) PumpOut() (err error) {
 		payload := <-self.inputCh
 
 		sz := len(payload.Data)
-		if sz > 0xffff {
+		if uint16(sz) > options.PacketSize {
 			Panic("receive malformed payload, linkid:%d, sz:%d", payload.Linkid, sz)
 			break
 		}
@@ -102,10 +108,12 @@ func (self *Tunnel) PumpOut() (err error) {
 		err = binary.Write(wr, binary.LittleEndian, &header)
 		if err != nil {
 			Error("write tunnel failed:%s", err.Error())
+			mpool.Put(payload.Data)
 			return
 		}
 
 		_, err = wr.Write(payload.Data)
+		mpool.Put(payload.Data)
 		if err != nil {
 			Error("write tunnel failed:%s", err.Error())
 			return

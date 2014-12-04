@@ -23,6 +23,12 @@ func _print(format string, a ...interface{}) {
 	logger.Printf(format, a...)
 }
 
+func Trace(format string, a ...interface{}) {
+	if options.LogLevel > 3 {
+		_print(format, a...)
+	}
+}
+
 func Debug(format string, a ...interface{}) {
 	if options.LogLevel > 2 {
 		_print(format, a...)
@@ -50,6 +56,14 @@ func LogStack(format string, a ...interface{}) {
 
 	buf := make([]byte, 8192)
 	runtime.Stack(buf, true)
+	_print("!!!!!statck!!!!!: %s", buf)
+}
+
+func LogCurStack(format string, a ...interface{}) {
+	_print(format, a...)
+
+	buf := make([]byte, 8192)
+	runtime.Stack(buf, false)
 	_print("!!!!!statck!!!!!: %s", buf)
 }
 

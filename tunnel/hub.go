@@ -53,7 +53,7 @@ func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) {
 	default:
 		Debug("link(%d) send cmd:%d", linkid, cmd)
 
-		buf := new(bytes.Buffer)
+		buf := bytes.NewBuffer(mpool.Get()[0:0])
 		var body CmdPayload
 		body.Cmd = cmd
 		body.Linkid = linkid
@@ -126,6 +126,7 @@ func (self *Hub) dispatch() {
 			cmd := new(CmdPayload)
 			buf := bytes.NewBuffer(payload.Data)
 			err := binary.Read(buf, binary.LittleEndian, cmd)
+			mpool.Put(payload.Data)
 			if err != nil {
 				Error("parse message failed:%s, break dispatch", err.Error())
 				break

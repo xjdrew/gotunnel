@@ -17,13 +17,15 @@ type Options struct {
 	Count      int    // tunnel count underlayer
 	RbufHw     int    // recv buffer high water
 	RbufLw     int    // recv buffer low water
-	Capacity   uint16
 	ConfigFile string
 	LogLevel   int
 	Rc4Key     []byte
+	Capacity   uint16
+	PacketSize uint16
 }
 
 var options *Options
+var mpool *MPool
 
 func init() {
 	rand.Seed(time.Now().Unix())
@@ -46,6 +48,7 @@ func (self *App) Add(service Service) {
 }
 
 func (self *App) Start() error {
+	mpool = NewMPool(int(options.PacketSize))
 	for _, service := range self.services {
 		err := service.Start()
 		if err != nil {
@@ -81,7 +84,7 @@ func (self *App) Wait() {
 }
 
 func (self *App) Status() {
-	Log("num goroutine: %d", runtime.NumGoroutine())
+	Log("num goroutine: %d, pool %d(%d)", runtime.NumGoroutine(), mpool.Used(), mpool.Alloced())
 }
 
 func NewApp(o *Options) *App {

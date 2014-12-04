@@ -58,6 +58,7 @@ func argsCheck() *tunnel.Options {
 	options.Capacity = 20480
 	options.RbufHw = 16
 	options.RbufLw = 4
+	options.PacketSize = 4096
 	options.Rc4Key = []byte(rc4Key)
 
 	if len(options.Rc4Key) > 256 {

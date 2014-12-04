@@ -88,19 +88,21 @@ func (self *Link) pumpIn() {
 		// qos balance
 		self.qos.Balance()
 
-		buffer := make([]byte, 4096)
+		buffer := mpool.Get()
 		n, err := rd.Read(buffer)
 		if err != nil {
 			if self.resetSflag() {
 				self.hub.Send(LINK_CLOSE_SEND, self.id, nil)
 			}
+			mpool.Put(buffer)
 			Debug("link(%d) read failed:%v", self.id, err)
 			break
 		}
-		Debug("link(%d) read %d bytes:%s", self.id, n, string(buffer[:n]))
+		Trace("link(%d) read %d bytes:%s", self.id, n, string(buffer[:n]))
 
 		if !self.sflag {
 			// receive LINK_CLOSE_WRITE
+			mpool.Put(buffer)
 			break
 		}
 		self.hub.Send(LINK_DATA, self.id, buffer[:n])
@@ -117,7 +119,10 @@ func (self *Link) pumpOut() {
 		if !ok {
 			break
 		}
+
 		_, err := self.conn.Write(data)
+		mpool.Put(data)
+
 		if err != nil {
 			if self.resetRflag() {
 				self.hub.Send(LINK_CLOSE_RECV, self.id, nil)
@@ -125,7 +130,7 @@ func (self *Link) pumpOut() {
 			Debug("link(%d) write failed:%v", self.id, err)
 			break
 		}
-		Debug("link(%d) write %d bytes:%s", self.id, len(data), string(data))
+		Trace("link(%d) write %d bytes:%s", self.id, len(data), string(data))
 	}
 }
 

@@ -56,12 +56,15 @@ func (self *Tunnel) PumpIn() (err error) {
 		close(self.outputCh)
 
 		self.inputLock.Lock()
+	Loop:
 		for {
 			select {
 			case <-self.inputCh:
 			default:
+				break Loop
 			}
 		}
+
 		close(self.inputCh)
 		self.inputCh = nil
 		self.inputLock.Unlock()
@@ -116,9 +119,7 @@ func (self *Tunnel) PumpOut() (err error) {
 	}
 
 	wr := NewRC4Writer(self.conn, options.Rc4Key)
-	for {
-		payload := <-self.inputCh
-
+	for payload := range self.inputCh {
 		sz := len(payload.Data)
 		if uint16(sz) > options.PacketSize {
 			Panic("receive malformed payload, linkid:%d, sz:%d", payload.Linkid, sz)

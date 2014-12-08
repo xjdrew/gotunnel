@@ -69,7 +69,6 @@ func (self *ServerHub) chooseHost() (host *Host) {
 }
 
 func (self *ServerHub) handleLink(linkid uint16, link *Link) {
-	defer self.Hub.wg.Done()
 	defer self.Hub.ReleaseLink(linkid)
 	defer Recover()
 
@@ -98,7 +97,6 @@ func (self *ServerHub) Ctrl(cmd *CmdPayload) bool {
 		link := self.NewLink(linkid)
 		if link != nil {
 			Info("link(%d) build link", linkid)
-			self.Hub.wg.Add(1)
 			go self.handleLink(linkid, link)
 		} else {
 			Error("link(%d) id conflict", linkid)

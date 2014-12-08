@@ -29,7 +29,9 @@ func (self *Link) resetSflag() bool {
 	if self.sflag {
 		self.sflag = false
 		// close read
-		self.conn.CloseRead()
+		if self.conn != nil {
+			self.conn.CloseRead()
+		}
 		return true
 	}
 	return false

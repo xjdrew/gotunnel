@@ -8,14 +8,21 @@ package tunnel
 import "sync"
 
 type LinkBuffer struct {
-	ch   chan []byte // wake up pop
-	off  int         // pop at &buf[off], put at &buf[len(buf)]
-	buf  [][]byte
-	lock sync.Mutex // protect ch && buf
+	ch    chan []byte // wake up pop
+	start int
+	end   int
+	buf   [][]byte
+	lock  sync.Mutex // protect ch && buf
 }
 
 func (b *LinkBuffer) Len() int {
-	return len(b.buf) - b.off
+	if b.start == b.end {
+		return 0
+	} else if b.end > b.start {
+		return b.end - b.start
+	} else {
+		return cap(b.buf) - b.start + b.end
+	}
 }
 
 func (b *LinkBuffer) Close() bool {
@@ -38,28 +45,27 @@ func (b *LinkBuffer) Put(data []byte) bool {
 	if b.ch == nil {
 		return false
 	}
-	m := b.Len()
-	if len(b.buf) == cap(b.buf) {
-		var buf [][]byte
-		if b.off > 0 {
-			copy(b.buf[:], b.buf[b.off:])
-			buf = b.buf[:m]
-		} else {
-			// no enough space
-			buf = make([][]byte, cap(b.buf)*2)
-			copy(buf, b.buf[:])
+
+	// if there is only 1 free slot, we allocate more
+	var old_cap = cap(b.buf)
+	if (b.end+1)%old_cap == b.start {
+		buf := make([][]byte, cap(b.buf)*2)
+		if b.end > b.start {
+			copy(buf, b.buf[b.start:b.end])
+		} else if b.end < b.start {
+			copy(buf, b.buf[b.start:old_cap])
+			copy(buf[old_cap-b.start:], b.buf[0:b.end])
 		}
 		b.buf = buf
-		b.off = 0
+		b.start = 0
+		b.end = old_cap - 1
 	}
 
-	n := b.off + m
-	b.buf = b.buf[0 : n+1]
-	b.buf[n] = data
-
+	b.buf[b.end] = data
+	b.end = (b.end + 1) % cap(b.buf)
 	select {
-	case b.ch <- b.buf[b.off]:
-		b.off += 1
+	case b.ch <- b.buf[b.start]:
+		b.start = (b.start + 1) % cap(b.buf)
 	default:
 	}
 	return true
@@ -68,14 +74,15 @@ func (b *LinkBuffer) Put(data []byte) bool {
 func (b *LinkBuffer) Pop() (data []byte, ok bool) {
 	b.lock.Lock()
 	ok = true
-	if b.off < len(b.buf) {
-		data = b.buf[b.off]
-		b.off += 1
+	if b.Len() > 0 {
+		data = b.buf[b.start]
+		b.start = (b.start + 1) % cap(b.buf)
 		b.lock.Unlock()
 		return
 	}
 	if b.ch == nil {
 		ok = false
+		b.lock.Unlock()
 		return
 	}
 	b.lock.Unlock()
@@ -87,6 +94,9 @@ func (b *LinkBuffer) Pop() (data []byte, ok bool) {
 
 func NewLinkBuffer(sz int) *LinkBuffer {
 	return &LinkBuffer{
-		ch:  make(chan []byte),
-		buf: make([][]byte, sz)[0:0]}
+		ch:    make(chan []byte),
+		buf:   make([][]byte, sz),
+		start: 0,
+		end:   0,
+	}
 }

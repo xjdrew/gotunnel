@@ -178,14 +178,14 @@ func (self *Hub) Wait() {
 	for i := uint16(1); i < self.LinkSet.capacity; i++ {
 		link := self.getLink(i)
 		if link != nil {
-			link.resetSflag()
+			link.resetRSflag()
 		}
 	}
 	Log("hub(%s) quit", self.tunnel.String())
 }
 
 func (self *Hub) Status() {
-	Log("<status> %s", self.tunnel.String())
+	Log("<status> %s, links(%d)", self.tunnel.String(), self.LinkSet.Len())
 }
 
 func (self *Hub) NewLink(linkid uint16) *Link {

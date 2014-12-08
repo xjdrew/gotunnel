@@ -11,7 +11,7 @@ type LinkBuffer struct {
 	ch   chan []byte // wake up pop
 	off  int         // pop at &buf[off], put at &buf[len(buf)]
 	buf  [][]byte
-	lock sync.Mutex
+	lock sync.Mutex // protect ch && buf
 }
 
 func (b *LinkBuffer) Len() int {

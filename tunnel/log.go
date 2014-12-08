@@ -56,7 +56,7 @@ func LogStack(format string, a ...interface{}) {
 
 	buf := make([]byte, 8192)
 	runtime.Stack(buf, true)
-	_print("!!!!!statck!!!!!: %s", buf)
+	_print("!!!!!stack!!!!!: %s", buf)
 }
 
 func LogCurStack(format string, a ...interface{}) {
@@ -64,7 +64,7 @@ func LogCurStack(format string, a ...interface{}) {
 
 	buf := make([]byte, 8192)
 	runtime.Stack(buf, false)
-	_print("!!!!!statck!!!!!: %s", buf)
+	_print("!!!!!stack!!!!!: %s", buf)
 }
 
 func Panic(format string, a ...interface{}) {

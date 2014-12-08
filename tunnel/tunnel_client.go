@@ -100,6 +100,10 @@ func (self *TunnelClient) Wait() {
 	Log("tunnel client quit")
 }
 
+func (self *TunnelClient) Status() {
+	self.hub.Status()
+}
+
 func NewTunnelClient() *TunnelClient {
 	return &TunnelClient{}
 }

@@ -97,16 +97,19 @@ func (self *Hub) ctrl(cmd *CmdPayload) {
 
 func (self *Hub) data(payload *TunnelPayload) {
 	linkid := payload.Linkid
-	Debug("link(%d) recv data:%d", linkid, len(payload.Data))
+	Info("link(%d) recv %d bytes data", linkid, len(payload.Data))
 
 	link := self.getLink(linkid)
 	if link == nil {
+		mpool.Put(payload.Data)
 		Error("link(%d) no link", linkid)
 		return
 	}
 
 	if !link.putData(payload.Data) {
+		mpool.Put(payload.Data)
 		Error("link(%d) put data failed", linkid)
+		return
 	}
 	return
 }
@@ -180,6 +183,10 @@ func (self *Hub) Wait() {
 		}
 	}
 	Log("hub(%s) quit", self.tunnel.String())
+}
+
+func (self *Hub) Status() {
+	Log("<status> %s", self.tunnel.String())
 }
 
 func (self *Hub) NewLink(linkid uint16) *Link {

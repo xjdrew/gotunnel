@@ -36,6 +36,7 @@ type Service interface {
 	Reload() error
 	Stop()
 	Wait()
+	Status()
 }
 
 type App struct {
@@ -84,7 +85,10 @@ func (self *App) Wait() {
 }
 
 func (self *App) Status() {
-	Log("num goroutine: %d, pool %d(%d)", runtime.NumGoroutine(), mpool.Used(), mpool.Alloced())
+	for _, service := range self.services {
+		service.Status()
+	}
+	LogStack("<status> num goroutine: %d, pool %d(%d)", runtime.NumGoroutine(), mpool.Used(), mpool.Alloced())
 }
 
 func NewApp(o *Options) *App {

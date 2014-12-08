@@ -123,7 +123,7 @@ func (self *Tunnel) PumpOut() (err error) {
 }
 
 func (self *Tunnel) String() string {
-	return self.desc
+	return fmt.Sprintf("%s input channel(%d), output channel(%d)", self.desc, len(self.inputCh), len(self.outputCh))
 }
 
 func newTunnel(conn *net.TCPConn) *Tunnel {
@@ -132,8 +132,8 @@ func newTunnel(conn *net.TCPConn) *Tunnel {
 	conn.SetLinger(-1)
 	desc := fmt.Sprintf("tunnel[%s <-> %s]", conn.LocalAddr(), conn.RemoteAddr())
 	tunnel := new(Tunnel)
-	tunnel.inputCh = make(chan *TunnelPayload, 65535)
-	tunnel.outputCh = make(chan *TunnelPayload, 65535)
+	tunnel.inputCh = make(chan *TunnelPayload, 1024)
+	tunnel.outputCh = make(chan *TunnelPayload, 1024)
 	tunnel.conn = conn
 	tunnel.desc = desc
 	return tunnel

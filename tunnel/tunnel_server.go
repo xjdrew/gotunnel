@@ -98,6 +98,15 @@ func (self *TunnelServer) Wait() {
 	Error("back hub quit")
 }
 
+func (self *TunnelServer) Status() {
+	self.rw.RLock()
+	defer self.rw.RUnlock()
+
+	for hub := range self.hubs {
+		hub.Status()
+	}
+}
+
 func NewTunnelServer() *TunnelServer {
 	return &TunnelServer{
 		hubs: make(map[*ServerHub]bool)}

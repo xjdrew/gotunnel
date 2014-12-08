@@ -7,48 +7,44 @@ package tunnel
 
 import (
 	"net"
-	"sync"
 )
 
 type TunnelClient struct {
-	ln  net.Listener
-	hub *Hub
-	wg  sync.WaitGroup
+	ln   net.Listener
+	hubs []*Hub
+	off  int // current hub
 }
 
-func (self *TunnelClient) createHub() error {
+func (self *TunnelClient) createHub() (hub *Hub, err error) {
 	conn, err := net.Dial("tcp", options.Server)
 	if err != nil {
-		return err
+		return
 	}
 	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
-	self.hub = newHub(newTunnel(conn.(*net.TCPConn)))
-	return err
+	hub = newHub(newTunnel(conn.(*net.TCPConn)))
+	return
 }
 
-func (self *TunnelClient) handleConn(conn *net.TCPConn) {
-	defer self.wg.Done()
+func (self *TunnelClient) handleConn(hub *Hub, conn *net.TCPConn) {
 	defer conn.Close()
 	defer Recover()
 
-	linkid := self.hub.AcquireId()
+	linkid := hub.AcquireId()
 	if linkid == 0 {
 		Error("alloc linkid failed, source: %v", conn.RemoteAddr())
 		return
 	}
-	defer self.hub.ReleaseId(linkid)
+	defer hub.ReleaseId(linkid)
 
 	Info("link(%d) create link, source: %v", linkid, conn.RemoteAddr())
-	link := self.hub.NewLink(linkid)
-	defer self.hub.ReleaseLink(linkid)
+	link := hub.NewLink(linkid)
+	defer hub.ReleaseLink(linkid)
 
 	link.SendCreate()
 	link.Pump(conn)
 }
 
 func (self *TunnelClient) listen() {
-	defer self.wg.Done()
-
 	var err error
 	self.ln, err = net.Listen("tcp", options.Listen)
 	if err != nil {
@@ -67,19 +63,22 @@ func (self *TunnelClient) listen() {
 			continue
 		}
 		Info("new connection from %v", conn.RemoteAddr())
-		self.wg.Add(1)
-		go self.handleConn(conn.(*net.TCPConn))
+		hub := self.hubs[self.off]
+		self.off = (self.off + 1) % len(self.hubs)
+		go self.handleConn(hub, conn.(*net.TCPConn))
 	}
 }
 
 func (self *TunnelClient) Start() error {
-	err := self.createHub()
-	if err != nil {
-		return err
+	for i := 0; i < len(self.hubs); i++ {
+		hub, err := self.createHub()
+		if err != nil {
+			return err
+		}
+		self.hubs[i] = hub
+		hub.Start()
 	}
-	self.hub.Start()
 
-	self.wg.Add(1)
 	go self.listen()
 	return nil
 }
@@ -90,20 +89,30 @@ func (self *TunnelClient) Reload() error {
 
 func (self *TunnelClient) Stop() {
 	self.ln.Close()
-	self.hub.Close()
+	for _, hub := range self.hubs {
+		hub.Close()
+	}
 	Log("close tunnel client")
 }
 
 func (self *TunnelClient) Wait() {
-	self.hub.Wait()
-	self.wg.Wait()
+	for _, hub := range self.hubs {
+		hub.Wait()
+	}
 	Log("tunnel client quit")
 }
 
 func (self *TunnelClient) Status() {
-	self.hub.Status()
+	for _, hub := range self.hubs {
+		hub.Status()
+	}
 }
 
 func NewTunnelClient() *TunnelClient {
-	return &TunnelClient{}
+	count := 1
+	if options.TunnelCount > 0 {
+		count = options.TunnelCount
+	}
+	return &TunnelClient{
+		hubs: make([]*Hub, count)}
 }

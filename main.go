@@ -50,12 +50,13 @@ func argsCheck() *tunnel.Options {
 	flag.StringVar(&options.Listen, "listen", ":8001", "host:port gotunnel listen on")
 	flag.StringVar(&options.Server, "server", "", "server address, empty if work as server")
 	flag.IntVar(&options.LogLevel, "log", 1, "larger value for detail log")
+	flag.IntVar(&options.TunnelCount, "tunnel_count", 1, "low level tunnel count")
 	flag.StringVar(&rc4Key, "rc4", "the answer to life, the universe and everything", "rc4 key, disable if no key")
 	//flag.IntVar(&options.Count, "count", 1, "underlayer tunnel count")
 	flag.Usage = usage
 	flag.Parse()
 
-	options.Capacity = 20480
+	options.Capacity = 10240
 	options.RbufHw = 16
 	options.RbufLw = 4
 	options.PacketSize = 4096

@@ -175,8 +175,7 @@ func (self *Hub) Wait() {
 	self.wg.Wait()
 	// tunnel disconnect, so reset all link
 	Info("reset all link")
-	var i uint16 = 1
-	for ; i < options.Capacity; i++ {
+	for i := uint16(1); i < self.LinkSet.capacity; i++ {
 		link := self.getLink(i)
 		if link != nil {
 			link.resetSflag()
@@ -203,7 +202,7 @@ func (self *Hub) ReleaseLink(linkid uint16) bool {
 
 func newHub(tunnel *Tunnel) *Hub {
 	hub := new(Hub)
-	hub.LinkSet = newLinkSet()
+	hub.LinkSet = newLinkSet(uint16(options.Capacity))
 	hub.tunnel = tunnel
 	return hub
 }

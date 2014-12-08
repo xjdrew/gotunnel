@@ -5,6 +5,7 @@
 package tunnel
 
 type LinkSet struct {
+	capacity   uint16
 	freeLinkid chan uint16
 	links      []*Link
 }
@@ -43,14 +44,13 @@ func (self *LinkSet) resetLink(id uint16) bool {
 	return false
 }
 
-func newLinkSet() *LinkSet {
-	capacity := options.Capacity
+func newLinkSet(capacity uint16) *LinkSet {
 	linkset := new(LinkSet)
+	linkset.capacity = capacity
 	linkset.links = make([]*Link, capacity)
 	if options.Server != "" {
 		freeLinkid := make(chan uint16, capacity)
-		var i uint16 = 1
-		for ; i < capacity; i++ {
+		for i := uint16(1); i < capacity; i++ {
 			freeLinkid <- i
 		}
 		linkset.freeLinkid = freeLinkid

@@ -123,13 +123,15 @@ func (self *Tunnel) PumpOut() (err error) {
 }
 
 func (self *Tunnel) String() string {
-	return fmt.Sprintf("%s input channel(%d), output channel(%d)", self.desc, len(self.inputCh), len(self.outputCh))
+	return fmt.Sprintf("%s write buffer(%d), read buffer(%d)", self.desc, len(self.inputCh), len(self.outputCh))
 }
 
 func newTunnel(conn *net.TCPConn) *Tunnel {
 	conn.SetKeepAlive(true)
 	conn.SetKeepAlivePeriod(time.Second * 60)
 	conn.SetLinger(-1)
+	conn.SetWriteBuffer(64 * 1024)
+	conn.SetReadBuffer(64 * 1024)
 	desc := fmt.Sprintf("tunnel[%s <-> %s]", conn.LocalAddr(), conn.RemoteAddr())
 	tunnel := new(Tunnel)
 	tunnel.inputCh = make(chan *TunnelPayload, 1024)

@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -19,20 +20,25 @@ type TunnelPayload struct {
 }
 
 type Tunnel struct {
-	inputCh  chan *TunnelPayload
-	outputCh chan *TunnelPayload
-	conn     *net.TCPConn
-	desc     string
+	inputLock *sync.RWMutex
+	inputCh   chan *TunnelPayload
+	outputCh  chan *TunnelPayload
+	conn      *net.TCPConn
+	desc      string
 }
 
 func (self *Tunnel) Close() {
-	if self.conn != nil {
-		self.conn.Close()
-	}
+	self.conn.Close()
 }
 
 func (self *Tunnel) Put(payload *TunnelPayload) {
-	self.inputCh <- payload
+	self.inputLock.RLock()
+	defer self.inputLock.RUnlock()
+
+	c := self.inputCh
+	if c != nil {
+		c <- payload
+	}
 }
 
 func (self *Tunnel) Pop() *TunnelPayload {
@@ -45,7 +51,21 @@ func (self *Tunnel) Pop() *TunnelPayload {
 
 // read from tunnel
 func (self *Tunnel) PumpIn() (err error) {
-	defer close(self.outputCh)
+	defer func() {
+		self.conn.CloseRead()
+		close(self.outputCh)
+
+		self.inputLock.Lock()
+		for {
+			select {
+			case <-self.inputCh:
+			default:
+			}
+		}
+		close(self.inputCh)
+		self.inputCh = nil
+		self.inputLock.Unlock()
+	}()
 
 	var header struct {
 		Linkid uint16
@@ -88,6 +108,8 @@ func (self *Tunnel) PumpIn() (err error) {
 
 // write to tunnel
 func (self *Tunnel) PumpOut() (err error) {
+	defer self.conn.CloseWrite()
+
 	var header struct {
 		Linkid uint16
 		Sz     uint16
@@ -130,10 +152,11 @@ func newTunnel(conn *net.TCPConn) *Tunnel {
 	conn.SetKeepAlive(true)
 	conn.SetKeepAlivePeriod(time.Second * 60)
 	conn.SetLinger(-1)
-	conn.SetWriteBuffer(64 * 1024)
-	conn.SetReadBuffer(64 * 1024)
+	// conn.SetWriteBuffer(64 * 1024)
+	// conn.SetReadBuffer(64 * 1024)
 	desc := fmt.Sprintf("tunnel[%s <-> %s]", conn.LocalAddr(), conn.RemoteAddr())
 	tunnel := new(Tunnel)
+	tunnel.inputLock = new(sync.RWMutex)
 	tunnel.inputCh = make(chan *TunnelPayload, 1024)
 	tunnel.outputCh = make(chan *TunnelPayload, 1024)
 	tunnel.conn = conn

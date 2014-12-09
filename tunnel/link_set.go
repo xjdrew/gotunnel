@@ -44,23 +44,13 @@ func (self *LinkSet) resetLink(id uint16) bool {
 	return false
 }
 
-func (self *LinkSet) Len() int {
-	var total int
-	for i := uint16(0); i < self.capacity; i++ {
-		if self.links[i] != nil {
-			total += 1
-		}
-	}
-	return total
-}
-
 func newLinkSet(capacity uint16) *LinkSet {
 	linkset := new(LinkSet)
 	linkset.capacity = capacity
 	linkset.links = make([]*Link, capacity)
 	if options.Server != "" {
 		freeLinkid := make(chan uint16, capacity)
-		for i := uint16(1); i <= capacity; i++ {
+		for i := uint16(1); i < capacity; i++ {
 			freeLinkid <- i
 		}
 		linkset.freeLinkid = freeLinkid

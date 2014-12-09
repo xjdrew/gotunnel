@@ -8,41 +8,41 @@ package tunnel
 import "sync"
 
 type LinkBuffer struct {
-	ch    chan []byte // wake up pop
-	start int
-	end   int
-	buf   [][]byte
-	lock  sync.Mutex // protect ch && buf
+	start  int
+	end    int
+	buf    [][]byte
+	cond   *sync.Cond // buffer notify
+	closed bool
+}
+
+func (b *LinkBuffer) bufferLen() int {
+	return (b.end + cap(b.buf) - b.start) % cap(b.buf)
 }
 
 func (b *LinkBuffer) Len() int {
-	if b.start == b.end {
-		return 0
-	} else if b.end > b.start {
-		return b.end - b.start
-	} else {
-		return cap(b.buf) - b.start + b.end
-	}
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
+	return b.bufferLen()
 }
 
 func (b *LinkBuffer) Close() bool {
-	b.lock.Lock()
-	defer b.lock.Unlock()
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
 
-	if b.ch == nil {
+	if b.closed {
 		return false
 	}
 
-	close(b.ch)
-	b.ch = nil
+	b.closed = true
+	b.cond.Broadcast()
 	return true
 }
 
 func (b *LinkBuffer) Put(data []byte) bool {
-	b.lock.Lock()
-	defer b.lock.Unlock()
+	b.cond.L.Lock()
+	defer b.cond.L.Unlock()
 
-	if b.ch == nil {
+	if b.closed {
 		return false
 	}
 
@@ -63,40 +63,36 @@ func (b *LinkBuffer) Put(data []byte) bool {
 
 	b.buf[b.end] = data
 	b.end = (b.end + 1) % cap(b.buf)
-	select {
-	case b.ch <- b.buf[b.start]:
-		b.start = (b.start + 1) % cap(b.buf)
-	default:
-	}
+	b.cond.Signal()
 	return true
 }
 
 func (b *LinkBuffer) Pop() (data []byte, ok bool) {
-	b.lock.Lock()
-	ok = true
-	if b.Len() > 0 {
-		data = b.buf[b.start]
-		b.start = (b.start + 1) % cap(b.buf)
-		b.lock.Unlock()
-		return
+	for {
+		b.cond.L.Lock()
+		ok = true
+		if b.bufferLen() > 0 {
+			data = b.buf[b.start]
+			b.start = (b.start + 1) % cap(b.buf)
+			b.cond.L.Unlock()
+			return
+		}
+		if b.closed {
+			ok = false
+			b.cond.L.Unlock()
+			return
+		}
+		b.cond.Wait()
+		b.cond.L.Unlock()
 	}
-	if b.ch == nil {
-		ok = false
-		b.lock.Unlock()
-		return
-	}
-	b.lock.Unlock()
-
-	// waiting for new data
-	data, ok = <-b.ch
-	return
 }
 
 func NewLinkBuffer(sz int) *LinkBuffer {
+	var l sync.Mutex
 	return &LinkBuffer{
-		ch:    make(chan []byte),
 		buf:   make([][]byte, sz),
 		start: 0,
 		end:   0,
+		cond:  sync.NewCond(&l),
 	}
 }

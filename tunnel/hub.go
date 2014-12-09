@@ -42,16 +42,16 @@ func (self *Hub) SetCtrlDelegate(delegate CtrlDelegate) {
 	self.delegate = delegate
 }
 
-func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) {
+func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
 	payload := new(TunnelPayload)
 	switch cmd {
 	case LINK_DATA:
-		Debug("link(%d) send data:%d", linkid, len(data))
+		Info("link(%d) send %d bytes data", linkid, len(data))
 
 		payload.Linkid = linkid
 		payload.Data = data
 	default:
-		Debug("link(%d) send cmd:%d", linkid, cmd)
+		Info("link(%d) send cmd:%d", linkid, cmd)
 
 		buf := bytes.NewBuffer(mpool.Get()[0:0])
 		var body CmdPayload
@@ -62,17 +62,20 @@ func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) {
 		payload.Linkid = 0
 		payload.Data = buf.Bytes()
 	}
-	self.tunnel.Put(payload)
+	err := self.tunnel.Write(payload)
+	if err != nil {
+		Error("%s write failed:%v", self.tunnel.String(), err)
+		return false
+	}
+	return true
 }
 
 func (self *Hub) ctrl(cmd *CmdPayload) {
-	linkid := cmd.Linkid
-	Info("link(%d) recv cmd:%d", linkid, cmd.Cmd)
-
 	if self.delegate != nil && self.delegate.Ctrl(cmd) {
 		return
 	}
 
+	linkid := cmd.Linkid
 	link := self.getLink(linkid)
 	if link == nil {
 		Error("link(%d) recv cmd:%d, no link", linkid, cmd.Cmd)
@@ -97,9 +100,8 @@ func (self *Hub) ctrl(cmd *CmdPayload) {
 
 func (self *Hub) data(payload *TunnelPayload) {
 	linkid := payload.Linkid
-	Info("link(%d) recv %d bytes data", linkid, len(payload.Data))
-
 	link := self.getLink(linkid)
+
 	if link == nil {
 		mpool.Put(payload.Data)
 		Error("link(%d) no link", linkid)
@@ -116,12 +118,13 @@ func (self *Hub) data(payload *TunnelPayload) {
 
 func (self *Hub) dispatch() {
 	defer self.wg.Done()
+	defer self.tunnel.Close()
 	defer Recover()
 
 	for {
-		payload := self.tunnel.Pop()
-		if payload == nil {
-			Error("pop message failed, break dispatch")
+		payload, err := self.tunnel.Read()
+		if err != nil {
+			Error("%s read failed:%v", self.tunnel.String(), err)
 			break
 		}
 
@@ -134,34 +137,16 @@ func (self *Hub) dispatch() {
 				Error("parse message failed:%s, break dispatch", err.Error())
 				break
 			}
+			Info("link(%d) recv cmd:%d", cmd.Linkid, cmd.Cmd)
 			self.ctrl(cmd)
 		} else {
+			Info("link(%d) recv %d bytes data", payload.Linkid, len(payload.Data))
 			self.data(payload)
 		}
 	}
 }
 
-func (self *Hub) pumpOut() {
-	self.wg.Done()
-	defer Recover()
-
-	self.tunnel.PumpOut()
-}
-
-func (self *Hub) pumpIn() {
-	self.wg.Done()
-	defer Recover()
-
-	self.tunnel.PumpIn()
-}
-
 func (self *Hub) Start() error {
-	self.wg.Add(1)
-	go self.pumpOut()
-
-	self.wg.Add(1)
-	go self.pumpIn()
-
 	self.wg.Add(1)
 	go self.dispatch()
 	return nil
@@ -185,7 +170,20 @@ func (self *Hub) Wait() {
 }
 
 func (self *Hub) Status() {
-	Log("<status> %s, links(%d)", self.tunnel.String(), self.LinkSet.Len())
+	total := 0
+	links := make([]uint16, 100)
+	for i := uint16(0); i < self.capacity; i++ {
+		if self.links[i] != nil {
+			if total < cap(links) {
+				links[total] = i
+			}
+			total += 1
+		}
+	}
+	if total <= cap(links) {
+		links = links[:total]
+	}
+	Log("<status> %s, %d links(%v)", self.tunnel.String(), total, links)
 }
 
 func (self *Hub) NewLink(linkid uint16) *Link {

@@ -19,7 +19,7 @@ type Options struct {
 	RbufLw      int    // recv buffer low water
 	ConfigFile  string
 	LogLevel    int
-	Rc4Key      []byte
+	RC4Key      []byte
 	Capacity    int
 	PacketSize  uint16
 	TunnelCount int // low level tunnel count; only for client

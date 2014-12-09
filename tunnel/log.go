@@ -54,7 +54,7 @@ func Log(format string, a ...interface{}) {
 func LogStack(format string, a ...interface{}) {
 	_print(format, a...)
 
-	buf := make([]byte, 8192)
+	buf := make([]byte, 32768)
 	runtime.Stack(buf, true)
 	_print("!!!!!stack!!!!!: %s", buf)
 }

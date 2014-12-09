@@ -8,6 +8,7 @@ package tunnel
 import (
 	"bufio"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -19,134 +20,75 @@ type TunnelPayload struct {
 	Data   []byte
 }
 
+type TunnelHeader struct {
+	Linkid uint16
+	Sz     uint16
+}
+
 type Tunnel struct {
-	inputLock *sync.RWMutex
-	inputCh   chan *TunnelPayload
-	outputCh  chan *TunnelPayload
-	conn      *net.TCPConn
-	desc      string
+	wlock  *sync.Mutex  // write lock
+	writer *RC4Writer   // writer
+	rlock  *sync.Mutex  // read lock
+	reader *RC4Reader   // reader
+	conn   *net.TCPConn // low level conn
+	desc   string       // description
 }
 
-func (self *Tunnel) Close() {
-	self.conn.Close()
+func (t *Tunnel) Close() {
+	t.conn.Close()
 }
 
-func (self *Tunnel) Put(payload *TunnelPayload) {
-	self.inputLock.RLock()
-	defer self.inputLock.RUnlock()
+func (t *Tunnel) Write(payload *TunnelPayload) (err error) {
+	defer mpool.Put(payload.Data)
 
-	c := self.inputCh
-	if c != nil {
-		c <- payload
+	var header TunnelHeader
+	header.Linkid = payload.Linkid
+	header.Sz = uint16(len(payload.Data))
+
+	t.wlock.Lock()
+	defer t.wlock.Unlock()
+	err = binary.Write(t.writer, binary.LittleEndian, &header)
+	if err != nil {
+		return
 	}
+	_, err = t.writer.Write(payload.Data)
+	return err
 }
 
-func (self *Tunnel) Pop() *TunnelPayload {
-	payload, ok := <-self.outputCh
-	if !ok {
-		return nil
-	}
-	return payload
-}
+func (t *Tunnel) Read() (payload *TunnelPayload, err error) {
+	t.rlock.Lock()
+	defer t.rlock.Unlock()
 
-// read from tunnel
-func (self *Tunnel) PumpIn() (err error) {
-	defer func() {
-		self.conn.CloseRead()
-		close(self.outputCh)
-
-		self.inputLock.Lock()
-	Loop:
-		for {
-			select {
-			case <-self.inputCh:
-			default:
-				break Loop
-			}
-		}
-
-		close(self.inputCh)
-		self.inputCh = nil
-		self.inputLock.Unlock()
-	}()
-
-	var header struct {
-		Linkid uint16
-		Sz     uint16
+	var header TunnelHeader
+	err = binary.Read(t.reader, binary.LittleEndian, &header)
+	if err != nil {
+		return
 	}
 
-	rd := NewRC4Reader(bufio.NewReaderSize(self.conn, 8192), options.Rc4Key)
-	for {
-		err = binary.Read(rd, binary.LittleEndian, &header)
+	if header.Sz > options.PacketSize {
+		err = errors.New("malformed packet, too long")
+		return
+	}
+
+	payload = &TunnelPayload{}
+	payload.Linkid = header.Linkid
+	data := mpool.Get()[0:header.Sz]
+	c := 0
+	for c < int(header.Sz) {
+		var n int
+		n, err = t.reader.Read(data[c:])
 		if err != nil {
-			Error("read tunnel failed:%s", err.Error())
+			mpool.Put(data)
 			return
 		}
-
-		if header.Sz > options.PacketSize {
-			Error("too long packet:%d", header.Sz)
-			return
-		}
-
-		var data []byte
-		if header.Sz > 0 {
-			data = mpool.Get()[0:header.Sz]
-			c := 0
-			for c < int(header.Sz) {
-				var n int
-				n, err = rd.Read(data[c:])
-				if err != nil {
-					mpool.Put(data)
-					Error("read tunnel failed:%s", err.Error())
-					return
-				}
-				c += n
-			}
-		}
-
-		self.outputCh <- &TunnelPayload{header.Linkid, data}
+		c += n
 	}
-	return
-}
-
-// write to tunnel
-func (self *Tunnel) PumpOut() (err error) {
-	defer self.conn.CloseWrite()
-
-	var header struct {
-		Linkid uint16
-		Sz     uint16
-	}
-
-	wr := NewRC4Writer(self.conn, options.Rc4Key)
-	for payload := range self.inputCh {
-		sz := len(payload.Data)
-		if uint16(sz) > options.PacketSize {
-			Panic("receive malformed payload, linkid:%d, sz:%d", payload.Linkid, sz)
-			break
-		}
-
-		header.Linkid = payload.Linkid
-		header.Sz = uint16(sz)
-		err = binary.Write(wr, binary.LittleEndian, &header)
-		if err != nil {
-			Error("write tunnel failed:%s", err.Error())
-			mpool.Put(payload.Data)
-			return
-		}
-
-		_, err = wr.Write(payload.Data)
-		mpool.Put(payload.Data)
-		if err != nil {
-			Error("write tunnel failed:%s", err.Error())
-			return
-		}
-	}
+	payload.Data = data
 	return
 }
 
 func (self *Tunnel) String() string {
-	return fmt.Sprintf("%s write buffer(%d), read buffer(%d)", self.desc, len(self.inputCh), len(self.outputCh))
+	return fmt.Sprintf("%s", self.desc)
 }
 
 func newTunnel(conn *net.TCPConn) *Tunnel {
@@ -156,11 +98,12 @@ func newTunnel(conn *net.TCPConn) *Tunnel {
 	// conn.SetWriteBuffer(64 * 1024)
 	// conn.SetReadBuffer(64 * 1024)
 	desc := fmt.Sprintf("tunnel[%s <-> %s]", conn.LocalAddr(), conn.RemoteAddr())
-	tunnel := new(Tunnel)
-	tunnel.inputLock = new(sync.RWMutex)
-	tunnel.inputCh = make(chan *TunnelPayload, 1024)
-	tunnel.outputCh = make(chan *TunnelPayload, 1024)
-	tunnel.conn = conn
-	tunnel.desc = desc
-	return tunnel
+	return &Tunnel{
+		wlock:  new(sync.Mutex),
+		writer: NewRC4Writer(conn, options.RC4Key),
+		rlock:  new(sync.Mutex),
+		reader: NewRC4Reader(bufio.NewReaderSize(conn, 8192), options.RC4Key),
+		conn:   conn,
+		desc:   desc,
+	}
 }

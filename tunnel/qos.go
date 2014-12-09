@@ -11,7 +11,7 @@ type Qos struct {
 	highWater        int
 	lowWater         int
 	localFlag        bool       // 本端高水位标志
-	remoteFlag       bool       // 对端高水位标志
+	remoteFlag       int        // 0:normal, 1:对端低水位标志, -1: close
 	cond             *sync.Cond // 对端低水位通知
 	enterHighWaterCb func()
 	enterLowWaterCb  func()
@@ -31,38 +31,38 @@ func (q *Qos) SetWater(water int) {
 }
 
 func (q *Qos) SetRemoteFlag(flag bool) {
-	cond := q.cond
-	if cond == nil {
+	q.cond.L.Lock()
+	defer q.cond.L.Unlock()
+
+	if q.remoteFlag == -1 {
 		return
 	}
-
-	cond.L.Lock()
-	q.remoteFlag = flag
-	if flag == false {
-		cond.Broadcast()
+	if flag {
+		q.remoteFlag = 1
+	} else {
+		q.remoteFlag = 0
 	}
-	cond.L.Unlock()
+
+	if q.remoteFlag == 0 {
+		q.cond.Broadcast()
+	}
 }
 
 func (q *Qos) Balance() {
-	cond := q.cond
-	if cond == nil {
-		return
-	}
+	q.cond.L.Lock()
+	defer q.cond.L.Unlock()
 
-	cond.L.Lock()
-	if q.remoteFlag {
-		cond.Wait()
+	if q.remoteFlag == 1 {
+		q.cond.Wait()
 	}
-	cond.L.Unlock()
 }
 
 func (q *Qos) Close() {
-	cond := q.cond
-	if cond != nil {
-		q.cond = nil
-		cond.Broadcast()
-	}
+	q.cond.L.Lock()
+	defer q.cond.L.Unlock()
+
+	q.remoteFlag = -1
+	q.cond.Broadcast()
 }
 
 func NewQos(highWater, lowWater int, enterHighWaterCb, enterLowWaterCb func()) *Qos {

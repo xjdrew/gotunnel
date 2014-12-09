@@ -10,7 +10,7 @@ func TestPool(t *testing.T) {
 		t.Error("unexpected used:%d", p.Used)
 	}
 	p.Put(a)
-	if p.Free() != 1 {
+	if p.Used() != 0 {
 		t.Error("unexpected free:%d", p.Used)
 	}
 }

@@ -107,7 +107,9 @@ func (self *Link) pumpIn() {
 			mpool.Put(buffer)
 			break
 		}
-		self.hub.Send(LINK_DATA, self.id, buffer[:n])
+		if !self.hub.Send(LINK_DATA, self.id, buffer[:n]) {
+			break
+		}
 	}
 }
 

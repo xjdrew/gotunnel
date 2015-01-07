@@ -15,18 +15,15 @@ import (
 	"github.com/xjdrew/gotunnel/tunnel"
 )
 
-const SIG_STOP = syscall.Signal(34)
 const SIG_RELOAD = syscall.Signal(35)
 const SIG_STATUS = syscall.Signal(36)
 
 func handleSignal(app *tunnel.App) {
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, SIG_STOP, SIG_RELOAD, SIG_STATUS, syscall.SIGTERM, syscall.SIGHUP)
+	signal.Notify(c, SIG_RELOAD, SIG_STATUS, syscall.SIGTERM, syscall.SIGHUP)
 
 	for sig := range c {
 		switch sig {
-		case SIG_STOP:
-			app.Stop()
 		case SIG_RELOAD:
 			app.Reload()
 		case SIG_STATUS:

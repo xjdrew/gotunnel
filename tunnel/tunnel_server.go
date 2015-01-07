@@ -39,12 +39,7 @@ func (self *TunnelServer) handleConn(conn *net.TCPConn) {
 	self.addHub(hub)
 	defer self.removeHub(hub)
 
-	err := hub.Start()
-	if err != nil {
-		Error("hub start failed:%s", err.Error())
-		return
-	}
-	hub.Wait()
+	hub.Start()
 }
 
 func (self *TunnelServer) listen() {
@@ -87,10 +82,6 @@ func (self *TunnelServer) Reload() error {
 		hub.Reload()
 	}
 	return nil
-}
-
-func (self *TunnelServer) Stop() {
-	self.ln.Close()
 }
 
 func (self *TunnelServer) Wait() {

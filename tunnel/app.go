@@ -35,7 +35,6 @@ func init() {
 type Service interface {
 	Start() error
 	Reload() error
-	Stop()
 	Wait()
 	Status()
 }
@@ -72,12 +71,6 @@ func (self *App) Start() error {
 func (self *App) Reload() {
 	for _, service := range self.services {
 		service.Reload()
-	}
-}
-
-func (self *App) Stop() {
-	for _, service := range self.services {
-		service.Stop()
 	}
 }
 

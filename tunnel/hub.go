@@ -8,7 +8,6 @@ package tunnel
 import (
 	"bytes"
 	"encoding/binary"
-	"sync"
 )
 
 const (
@@ -35,7 +34,6 @@ type Hub struct {
 	tunnel *Tunnel
 
 	delegate CtrlDelegate
-	wg       sync.WaitGroup
 }
 
 func (self *Hub) SetCtrlDelegate(delegate CtrlDelegate) {
@@ -117,9 +115,7 @@ func (self *Hub) data(payload *TunnelPayload) {
 }
 
 func (self *Hub) dispatch() {
-	defer self.wg.Done()
 	defer self.tunnel.Close()
-	defer Recover()
 
 	for {
 		payload, err := self.tunnel.Read()
@@ -146,18 +142,9 @@ func (self *Hub) dispatch() {
 	}
 }
 
-func (self *Hub) Start() error {
-	self.wg.Add(1)
-	go self.dispatch()
-	return nil
-}
+func (self *Hub) Start() {
+	self.dispatch()
 
-func (self *Hub) Close() {
-	self.tunnel.Close()
-}
-
-func (self *Hub) Wait() {
-	self.wg.Wait()
 	// tunnel disconnect, so reset all link
 	Info("reset all link")
 	for i := uint16(1); i < self.LinkSet.capacity; i++ {

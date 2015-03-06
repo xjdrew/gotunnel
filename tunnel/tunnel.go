@@ -91,7 +91,7 @@ func (self *Tunnel) String() string {
 	return fmt.Sprintf("%s", self.desc)
 }
 
-func newTunnel(conn *net.TCPConn) *Tunnel {
+func newTunnel(conn *net.TCPConn, rc4key []byte) *Tunnel {
 	conn.SetKeepAlive(true)
 	conn.SetKeepAlivePeriod(time.Second * 60)
 	conn.SetLinger(-1)
@@ -100,9 +100,9 @@ func newTunnel(conn *net.TCPConn) *Tunnel {
 	desc := fmt.Sprintf("tunnel[%s <-> %s]", conn.LocalAddr(), conn.RemoteAddr())
 	return &Tunnel{
 		wlock:  new(sync.Mutex),
-		writer: NewRC4Writer(conn, options.RC4Key),
+		writer: NewRC4Writer(conn, rc4key),
 		rlock:  new(sync.Mutex),
-		reader: NewRC4Reader(bufio.NewReaderSize(conn, 8192), options.RC4Key),
+		reader: NewRC4Reader(bufio.NewReaderSize(conn, 8192), rc4key),
 		conn:   conn,
 		desc:   desc,
 	}

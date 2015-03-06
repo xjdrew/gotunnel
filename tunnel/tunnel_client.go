@@ -6,8 +6,11 @@
 package tunnel
 
 import (
+	"errors"
+	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 type TunnelClient struct {
@@ -23,7 +26,31 @@ func (self *TunnelClient) createHub() (hub *Hub, err error) {
 		return
 	}
 	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
-	hub = newHub(newTunnel(conn.(*net.TCPConn)))
+
+	// auth
+	challenge := make([]byte, TaaBlockSize)
+	if _, err = io.ReadFull(conn, challenge); err != nil {
+		Error("read challenge failed(%v):%s", conn.RemoteAddr(), err)
+		return
+	}
+	Debug("challenge(%v), len %d, %v", conn.RemoteAddr(), len(challenge), challenge)
+
+	a := NewTaa(options.Secret)
+	token, ok := a.ExchangeCipherBlock(challenge)
+	if !ok {
+		err = errors.New("exchange chanllenge failed")
+		Error("exchange challenge failed(%v)", conn.RemoteAddr())
+		return
+	}
+
+	Debug("token(%v), len %d, %v", conn.RemoteAddr(), len(token), token)
+	if _, err = conn.Write(token); err != nil {
+		Error("write token failed(%v):%s", conn.RemoteAddr(), err)
+		return
+	}
+
+	Info("rc4key: %v", a.GetRc4key())
+	hub = newHub(newTunnel(conn.(*net.TCPConn), a.GetRc4key()))
 	return
 }
 
@@ -85,30 +112,41 @@ func (self *TunnelClient) listen() {
 }
 
 func (self *TunnelClient) Start() error {
+	done := make(chan error, len(self.hubs))
 	for i := 0; i < len(self.hubs); i++ {
-		hub, err := self.createHub()
-		if err != nil {
-			return err
-		}
-		self.hubs[i] = hub
-
 		go func(index int) {
 			Recover()
 
-			hub.Start()
+			first := true
 			for {
-				Error("tunnel %d disconnected", index)
-				self.hubs[index] = nil
 				hub, err := self.createHub()
-				if err != nil {
+				if first {
+					first = false
+					done <- err
+					if err != nil {
+						Error("tunnel %d connect failed", index)
+						break
+					}
+				} else if err != nil {
 					Error("tunnel %d reconnect failed", index)
+					time.Sleep(time.Second)
 					continue
 				}
-				Error("tunnel %d reconnect succeed", index)
+
+				Error("tunnel %d connect succeed", index)
 				self.hubs[index] = hub
 				hub.Start()
+				self.hubs[index] = nil
+				Error("tunnel %d disconnected", index)
 			}
 		}(i)
+	}
+
+	for i := 0; i < len(self.hubs); i++ {
+		err := <-done
+		if err != nil {
+			return err
+		}
 	}
 
 	self.wg.Add(1)

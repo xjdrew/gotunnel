@@ -19,12 +19,13 @@ go install gotunnel
 
 ## run
 ```
-$ bin/gotunnel
+$ bin/gotunnel 
 usage: bin/gotunnel [configFile]
   -listen=":8001": host:port gotunnel listen on
   -log=1: larger value for detail log
-  -rc4="the answer to life, the universe and everything": rc4 key, disable if no key
+  -secret="the answer to life, the universe and everything": connection secret, disable if has none
   -server="": server address, empty if work as server
+  -tunnel_count=1: underlayer tunnel count
 ```
 
 ## useage

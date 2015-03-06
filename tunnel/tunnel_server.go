@@ -6,6 +6,7 @@
 package tunnel
 
 import (
+	"io"
 	"net"
 	"sync"
 )
@@ -35,7 +36,32 @@ func (self *TunnelServer) handleConn(conn *net.TCPConn) {
 	defer Recover()
 
 	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
-	hub := newServerHub(newTunnel(conn))
+
+	// authenticate connection
+	a := NewTaa(options.Secret)
+	a.GenToken()
+
+	challenge := a.GenCipherBlock(nil)
+	Debug("challenge(%v), len %d, %v", conn.RemoteAddr(), len(challenge), challenge)
+	if _, err := conn.Write(challenge); err != nil {
+		Error("write challenge failed(%v):%s", conn.RemoteAddr(), err)
+		return
+	}
+
+	token := make([]byte, TaaBlockSize)
+	if _, err := io.ReadFull(conn, token); err != nil {
+		Error("read token failed(%v):%s", conn.RemoteAddr(), err)
+		return
+	}
+
+	Debug("token(%v), len %d, %v", conn.RemoteAddr(), len(token), token)
+	if !a.VerifyCipherBlock(token) {
+		Error("verify token failed(%v)", conn.RemoteAddr())
+		return
+	}
+
+	Info("rc4key: %v", a.GetRc4key())
+	hub := newServerHub(newTunnel(conn, a.GetRc4key()))
 	self.addHub(hub)
 	defer self.removeHub(hub)
 

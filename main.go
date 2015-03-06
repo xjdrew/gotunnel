@@ -43,13 +43,11 @@ func usage() {
 func argsCheck() *tunnel.Options {
 	var options tunnel.Options
 
-	var rc4Key string
 	flag.StringVar(&options.Listen, "listen", ":8001", "host:port gotunnel listen on")
 	flag.StringVar(&options.Server, "server", "", "server address, empty if work as server")
 	flag.IntVar(&options.LogLevel, "log", 1, "larger value for detail log")
-	flag.IntVar(&options.TunnelCount, "tunnel_count", 1, "low level tunnel count")
-	flag.StringVar(&rc4Key, "rc4", "the answer to life, the universe and everything", "rc4 key, disable if no key")
-	//flag.IntVar(&options.Count, "count", 1, "underlayer tunnel count")
+	flag.IntVar(&options.TunnelCount, "tunnel_count", 1, "underlayer tunnel count")
+	flag.StringVar(&options.Secret, "secret", "the answer to life, the universe and everything", "connection secret, disable if has none")
 	flag.Usage = usage
 	flag.Parse()
 
@@ -57,12 +55,6 @@ func argsCheck() *tunnel.Options {
 	options.RbufHw = 12
 	options.RbufLw = 2
 	options.PacketSize = 4096
-	options.RC4Key = []byte(rc4Key)
-
-	if len(options.RC4Key) > 256 {
-		fmt.Println("rc4 key at most 256 bytes")
-		os.Exit(1)
-	}
 
 	// will support multiple tunnel in future
 	options.Count = 1

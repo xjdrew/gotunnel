@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"time"
 )
 
 type Host struct {
@@ -87,7 +88,11 @@ func (self *ServerHub) handleLink(linkid uint16, link *Link) {
 	}
 
 	Info("link(%d) new connection to %v", linkid, dest.RemoteAddr())
-	link.Pump(dest.(*net.TCPConn))
+
+	conn := dest.(*net.TCPConn)
+	conn.SetKeepAlive(true)
+	conn.SetKeepAlivePeriod(time.Second * 60)
+	link.Pump(conn)
 }
 
 func (self *ServerHub) Ctrl(cmd *CmdPayload) bool {

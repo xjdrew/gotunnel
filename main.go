@@ -47,7 +47,7 @@ func argsCheck() *tunnel.Options {
 	flag.StringVar(&options.Server, "server", "", "server address, empty if work as server")
 	flag.IntVar(&options.LogLevel, "log", 1, "larger value for detail log")
 	flag.IntVar(&options.TunnelCount, "tunnel_count", 1, "underlayer tunnel count")
-	flag.StringVar(&options.Secret, "secret", "the answer to life, the universe and everything", "connection secret, disable if has none")
+	flag.StringVar(&options.Secret, "secret", "the answer to life, the universe and everything", "connection secret")
 	flag.Usage = usage
 	flag.Parse()
 

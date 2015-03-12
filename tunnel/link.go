@@ -8,7 +8,6 @@ package tunnel
 import (
 	"bufio"
 	"errors"
-	"net"
 	"sync"
 )
 
@@ -16,8 +15,8 @@ var errPeerClosed = errors.New("errPeerClosed")
 
 type Link struct {
 	id    uint16
+	conn  BiConn
 	hub   *Hub
-	conn  *net.TCPConn
 	rbuf  *LinkBuffer // 接收缓存
 	sflag bool        // 对端是否可以收数据
 	qos   *Qos
@@ -138,9 +137,7 @@ func (self *Link) pumpOut() {
 	}
 }
 
-func (self *Link) Pump(conn *net.TCPConn) {
-	conn.SetKeepAlive(true)
-	conn.SetLinger(-1)
+func (self *Link) Pump(conn BiConn) {
 	self.conn = conn
 
 	self.wg.Add(1)

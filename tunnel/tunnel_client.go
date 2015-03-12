@@ -49,12 +49,11 @@ func (self *TunnelClient) createHub() (hub *Hub, err error) {
 		return
 	}
 
-	Info("rc4key: %v", a.GetRc4key())
 	hub = newHub(newTunnel(conn.(*net.TCPConn), a.GetRc4key()))
 	return
 }
 
-func (self *TunnelClient) handleConn(hub *Hub, conn *net.TCPConn) {
+func (self *TunnelClient) handleConn(hub *Hub, conn BiConn) {
 	defer conn.Close()
 	defer Recover()
 
@@ -107,7 +106,11 @@ func (self *TunnelClient) listen() {
 		}
 		Info("new connection from %v", conn.RemoteAddr())
 		hub := self.fetchHub()
-		go self.handleConn(hub, conn.(*net.TCPConn))
+
+		tcpConn := conn.(*net.TCPConn)
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(time.Second * 60)
+		go self.handleConn(hub, tcpConn)
 	}
 }
 

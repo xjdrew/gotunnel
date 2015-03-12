@@ -10,9 +10,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"net"
 	"sync"
-	"time"
 )
 
 type TunnelPayload struct {
@@ -26,12 +24,12 @@ type TunnelHeader struct {
 }
 
 type Tunnel struct {
-	wlock  *sync.Mutex  // write lock
-	writer *RC4Writer   // writer
-	rlock  *sync.Mutex  // read lock
-	reader *RC4Reader   // reader
-	conn   *net.TCPConn // low level conn
-	desc   string       // description
+	wlock  *sync.Mutex // write lock
+	writer *RC4Writer  // writer
+	rlock  *sync.Mutex // read lock
+	reader *RC4Reader  // reader
+	conn   BiConn      // low level conn
+	desc   string      // description
 }
 
 func (t *Tunnel) Close() {
@@ -91,12 +89,7 @@ func (self *Tunnel) String() string {
 	return fmt.Sprintf("%s", self.desc)
 }
 
-func newTunnel(conn *net.TCPConn, rc4key []byte) *Tunnel {
-	conn.SetKeepAlive(true)
-	conn.SetKeepAlivePeriod(time.Second * 60)
-	conn.SetLinger(-1)
-	// conn.SetWriteBuffer(64 * 1024)
-	// conn.SetReadBuffer(64 * 1024)
+func newTunnel(conn BiConn, rc4key []byte) *Tunnel {
 	desc := fmt.Sprintf("tunnel[%s <-> %s]", conn.LocalAddr(), conn.RemoteAddr())
 	return &Tunnel{
 		wlock:  new(sync.Mutex),

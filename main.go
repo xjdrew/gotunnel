@@ -52,8 +52,6 @@ func argsCheck() *tunnel.Options {
 	flag.Parse()
 
 	options.Capacity = 10240
-	options.RbufHw = 12
-	options.RbufLw = 2
 	options.PacketSize = 4096
 
 	// will support multiple tunnel in future

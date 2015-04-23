@@ -19,7 +19,6 @@ type Link struct {
 	hub   *Hub
 	rbuf  *LinkBuffer // 接收缓存
 	sflag bool        // 对端是否可以收数据
-	qos   *Qos
 	wg    sync.WaitGroup
 }
 
@@ -38,7 +37,6 @@ func (self *Link) resetSflag() bool {
 
 // stop recv data from remote
 func (self *Link) resetRflag() bool {
-	self.qos.Close()
 	return self.rbuf.Close()
 }
 
@@ -47,11 +45,6 @@ func (self *Link) resetRSflag() bool {
 	ok1 := self.resetSflag()
 	ok2 := self.resetRflag()
 	return ok1 || ok2
-}
-
-// set remote qos flag
-func (self *Link) setRemoteQosFlag(flag bool) {
-	self.qos.SetRemoteFlag(flag)
 }
 
 func (self *Link) SendCreate() {
@@ -64,19 +57,11 @@ func (self *Link) SendClose() {
 }
 
 func (self *Link) putData(data []byte) bool {
-	ok := self.rbuf.Put(data)
-	if ok {
-		self.qos.SetWater(self.rbuf.Len())
-	}
-	return ok
+	return self.rbuf.Put(data)
 }
 
-func (self *Link) popData() (data []byte, ok bool) {
-	data, ok = self.rbuf.Pop()
-	if ok {
-		self.qos.SetWater(self.rbuf.Len())
-	}
-	return
+func (self *Link) popData() ([]byte, bool) {
+	return self.rbuf.Pop()
 }
 
 // read from link
@@ -86,9 +71,6 @@ func (self *Link) pumpIn() {
 
 	rd := bufio.NewReaderSize(self.conn, 4096)
 	for {
-		// qos balance
-		self.qos.Balance()
-
 		buffer := mpool.Get()
 		n, err := rd.Read(buffer)
 		if err != nil {
@@ -152,15 +134,8 @@ func (self *Link) Pump(conn BiConn) {
 
 func newLink(id uint16, hub *Hub) *Link {
 	return &Link{
-		id:   id,
-		hub:  hub,
-		rbuf: NewLinkBuffer(16),
-		qos: NewQos(options.RbufHw, options.RbufLw, func() {
-			hub.Send(LINK_RECVBUF_HW, id, nil)
-			Error("link(%d) enter high water", id)
-		}, func() {
-			hub.Send(LINK_RECVBUF_LW, id, nil)
-			Error("link(%d) leave high water", id)
-		}),
+		id:    id,
+		hub:   hub,
+		rbuf:  NewLinkBuffer(16),
 		sflag: true}
 }

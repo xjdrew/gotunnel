@@ -16,8 +16,6 @@ const (
 	LINK_CLOSE
 	LINK_CLOSE_RECV
 	LINK_CLOSE_SEND
-	LINK_RECVBUF_HW // recv buffer enter high water
-	LINK_RECVBUF_LW // recv buffer enter low water
 )
 
 type CmdPayload struct {
@@ -87,10 +85,6 @@ func (self *Hub) ctrl(cmd *CmdPayload) {
 		link.resetSflag()
 	case LINK_CLOSE_SEND:
 		link.resetRflag()
-	case LINK_RECVBUF_HW:
-		link.setRemoteQosFlag(true)
-	case LINK_RECVBUF_LW:
-		link.setRemoteQosFlag(false)
 	default:
 		Error("link(%d) receive unknown cmd:%v", linkid, cmd)
 	}

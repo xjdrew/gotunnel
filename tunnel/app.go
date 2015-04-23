@@ -15,8 +15,6 @@ type Options struct {
 	Listen      string
 	Server      string // tunnel server or client
 	Count       int    // tunnel count underlayer
-	RbufHw      int    // recv buffer high water
-	RbufLw      int    // recv buffer low water
 	ConfigFile  string
 	LogLevel    int
 	Secret      string

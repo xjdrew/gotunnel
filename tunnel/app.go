@@ -12,15 +12,17 @@ import (
 )
 
 type Options struct {
-	Listen      string
-	Server      string // tunnel server or client
-	Count       int    // tunnel count underlayer
-	ConfigFile  string
-	LogLevel    int
-	Secret      string
-	Capacity    int
-	PacketSize  uint16
-	TunnelCount int // low level tunnel count; only for client
+	Listen            string
+	Server            string // tunnel server or client
+	Count             int    // tunnel count underlayer
+	ConfigFile        string
+	LogLevel          int
+	Secret            string
+	Capacity          int
+	PacketSize        uint16
+	TunnelCount       int // low level tunnel count; only for client
+	TunnelReadBuffer  int
+	TunnelWriteBuffer int
 }
 
 var options *Options

@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"time"
 )
 
 type TunnelServer struct {
@@ -31,7 +30,7 @@ func (self *TunnelServer) removeHub(hub *ServerHub) {
 	self.rw.Unlock()
 }
 
-func (self *TunnelServer) handleConn(conn BiConn) {
+func (self *TunnelServer) handleConn(conn *net.TCPConn) {
 	defer self.wg.Done()
 	defer conn.Close()
 	defer Recover()
@@ -91,8 +90,6 @@ func (self *TunnelServer) listen() {
 		Debug("back server, new connection from %v", conn.RemoteAddr())
 		self.wg.Add(1)
 		tcpConn := conn.(*net.TCPConn)
-		tcpConn.SetKeepAlive(true)
-		tcpConn.SetKeepAlivePeriod(time.Second * 60)
 		go self.handleConn(tcpConn)
 	}
 }

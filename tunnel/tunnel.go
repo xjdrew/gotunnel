@@ -38,7 +38,7 @@ func (t *Tunnel) Close() {
 	t.conn.Close()
 }
 
-func (t *Tunnel) Write(payload *TunnelPayload) (err error) {
+func (t *Tunnel) Write(payload TunnelPayload) (err error) {
 	defer mpool.Put(payload.Data)
 
 	var header TunnelHeader

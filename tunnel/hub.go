@@ -39,7 +39,7 @@ func (self *Hub) SetCtrlDelegate(delegate CtrlDelegate) {
 }
 
 func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
-	payload := new(TunnelPayload)
+	var payload TunnelPayload
 	switch cmd {
 	case LINK_DATA:
 		Info("link(%d) send %d bytes data", linkid, len(data))

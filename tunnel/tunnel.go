@@ -10,7 +10,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
+	"time"
 )
 
 type TunnelPayload struct {
@@ -24,12 +26,12 @@ type TunnelHeader struct {
 }
 
 type Tunnel struct {
-	wlock  *sync.Mutex // write lock
-	writer *RC4Writer  // writer
-	rlock  *sync.Mutex // read lock
-	reader *RC4Reader  // reader
-	conn   BiConn      // low level conn
-	desc   string      // description
+	wlock  *sync.Mutex  // write lock
+	writer *RC4Writer   // writer
+	rlock  *sync.Mutex  // read lock
+	reader *RC4Reader   // reader
+	conn   *net.TCPConn // low level conn
+	desc   string       // description
 }
 
 func (t *Tunnel) Close() {
@@ -89,8 +91,16 @@ func (self *Tunnel) String() string {
 	return fmt.Sprintf("%s", self.desc)
 }
 
-func newTunnel(conn BiConn, rc4key []byte) *Tunnel {
+func newTunnel(conn *net.TCPConn, rc4key []byte) *Tunnel {
 	desc := fmt.Sprintf("tunnel[%s <-> %s]", conn.LocalAddr(), conn.RemoteAddr())
+	if err := conn.SetReadBuffer(options.TunnelReadBuffer); err != nil {
+		Error("%s set read buffer failed:%s", desc, err.Error())
+	}
+	if err := conn.SetWriteBuffer(options.TunnelWriteBuffer); err != nil {
+		Error("%s set read buffer failed:%s", desc, err.Error())
+	}
+	conn.SetKeepAlive(true)
+	conn.SetKeepAlivePeriod(time.Second * 60)
 	return &Tunnel{
 		wlock:  new(sync.Mutex),
 		writer: NewRC4Writer(conn, rc4key),

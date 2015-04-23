@@ -60,10 +60,6 @@ func (self *Link) putData(data []byte) bool {
 	return self.rbuf.Put(data)
 }
 
-func (self *Link) popData() ([]byte, bool) {
-	return self.rbuf.Pop()
-}
-
 // read from link
 func (self *Link) pumpIn() {
 	defer self.wg.Done()
@@ -100,7 +96,7 @@ func (self *Link) pumpOut() {
 	defer self.conn.CloseWrite()
 
 	for {
-		data, ok := self.popData()
+		data, ok := self.rbuf.Pop()
 		if !ok {
 			break
 		}

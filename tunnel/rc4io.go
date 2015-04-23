@@ -35,9 +35,8 @@ type RC4Writer struct {
 
 func (w *RC4Writer) Write(p []byte) (int, error) {
 	if w.c != nil {
-		cp := make([]byte, len(p))
-		w.c.XORKeyStream(cp, p)
-		return w.wr.Write(cp)
+		w.c.XORKeyStream(p, p)
+		return w.wr.Write(p)
 	}
 	return w.wr.Write(p)
 }

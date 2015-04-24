@@ -95,7 +95,7 @@ func (self *ServerHub) handleLink(linkid uint16, link *Link) {
 	link.Pump(conn)
 }
 
-func (self *ServerHub) Ctrl(cmd *CmdPayload) bool {
+func (self *ServerHub) Ctrl(cmd CmdPayload) bool {
 	linkid := cmd.Linkid
 	switch cmd.Cmd {
 	case LINK_CREATE:

@@ -24,7 +24,7 @@ type CmdPayload struct {
 }
 
 type CtrlDelegate interface {
-	Ctrl(cmd *CmdPayload) bool
+	Ctrl(cmd CmdPayload) bool
 }
 
 type Hub struct {
@@ -68,7 +68,7 @@ func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
 	return true
 }
 
-func (self *Hub) ctrl(cmd *CmdPayload) {
+func (self *Hub) ctrl(cmd CmdPayload) {
 	if self.delegate != nil && self.delegate.Ctrl(cmd) {
 		return
 	}
@@ -113,6 +113,7 @@ func (self *Hub) data(payload *TunnelPayload) {
 func (self *Hub) dispatch() {
 	defer self.tunnel.Close()
 
+	var cmd CmdPayload
 	for {
 		payload, err := self.tunnel.Read()
 		if err != nil {
@@ -121,9 +122,8 @@ func (self *Hub) dispatch() {
 		}
 
 		if payload.Linkid == 0 {
-			cmd := new(CmdPayload)
 			buf := bytes.NewBuffer(payload.Data)
-			err := binary.Read(buf, binary.LittleEndian, cmd)
+			err := binary.Read(buf, binary.LittleEndian, &cmd)
 			mpool.Put(payload.Data)
 			if err != nil {
 				Error("parse message failed:%s, break dispatch", err.Error())

@@ -48,7 +48,7 @@ func argsCheck() *tunnel.Options {
 	flag.IntVar(&options.LogLevel, "log", 1, "larger value for detail log")
 	flag.IntVar(&options.TunnelCount, "tunnel_count", 1, "tunnel count")
 	flag.IntVar(&options.TunnelReadBuffer, "tunnel_read_buffer", 262144, "tunnel read buffer")
-	flag.IntVar(&options.TunnelWriteBuffer, "tunnel_write_buffer", 262144, "tunnel write buffer")
+	flag.IntVar(&options.TunnelWriteBuffer, "tunnel_write_buffer", 65536, "tunnel write buffer")
 	flag.StringVar(&options.Secret, "secret", "the answer to life, the universe and everything", "connection secret")
 	flag.Usage = usage
 	flag.Parse()

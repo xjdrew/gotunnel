@@ -58,11 +58,13 @@ func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
 		payload.Linkid = 0
 		payload.Data = buf.Bytes()
 	}
+
 	err := self.tunnel.Write(payload)
 	if err != nil {
 		Error("%s write failed:%v", self.tunnel.String(), err)
 		return false
 	}
+
 	return true
 }
 

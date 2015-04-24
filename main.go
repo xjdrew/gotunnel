@@ -50,6 +50,7 @@ func argsCheck() *tunnel.Options {
 	flag.IntVar(&options.TunnelReadBuffer, "tunnel_read_buffer", 262144, "tunnel read buffer")
 	flag.IntVar(&options.TunnelWriteBuffer, "tunnel_write_buffer", 65536, "tunnel write buffer")
 	flag.StringVar(&options.Secret, "secret", "the answer to life, the universe and everything", "connection secret")
+	flag.BoolVar(&options.HalfClosedLink, "half_closed_link", false, "enable half-closed connection support")
 	flag.Usage = usage
 	flag.Parse()
 

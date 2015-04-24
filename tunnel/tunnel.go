@@ -26,12 +26,12 @@ type TunnelHeader struct {
 }
 
 type Tunnel struct {
-	wlock  *sync.Mutex  // write lock
-	writer *RC4Writer   // writer
-	rlock  *sync.Mutex  // read lock
-	reader *RC4Reader   // reader
-	conn   *net.TCPConn // low level conn
-	desc   string       // description
+	wlock  *sync.Mutex   // write lock
+	writer *bufio.Writer // writer
+	rlock  *sync.Mutex   // read lock
+	reader *bufio.Reader // reader
+	conn   *net.TCPConn  // low level conn
+	desc   string        // description
 }
 
 func (t *Tunnel) Close() {
@@ -47,12 +47,16 @@ func (t *Tunnel) Write(payload TunnelPayload) (err error) {
 
 	t.wlock.Lock()
 	defer t.wlock.Unlock()
-	err = binary.Write(t.writer, binary.LittleEndian, &header)
-	if err != nil {
+	if err = binary.Write(t.writer, binary.LittleEndian, &header); err != nil {
 		return
 	}
-	_, err = t.writer.Write(payload.Data)
-	return err
+	if _, err = t.writer.Write(payload.Data); err != nil {
+		return
+	}
+	if err = t.writer.Flush(); err != nil {
+		return
+	}
+	return
 }
 
 func (t *Tunnel) Read() (payload *TunnelPayload, err error) {
@@ -101,11 +105,12 @@ func newTunnel(conn *net.TCPConn, rc4key []byte) *Tunnel {
 	}
 	conn.SetKeepAlive(true)
 	conn.SetKeepAlivePeriod(time.Second * 60)
+	bufsize := int(options.PacketSize) * 2
 	return &Tunnel{
 		wlock:  new(sync.Mutex),
-		writer: NewRC4Writer(conn, rc4key),
+		writer: bufio.NewWriterSize(NewRC4Writer(conn, rc4key), bufsize),
 		rlock:  new(sync.Mutex),
-		reader: NewRC4Reader(bufio.NewReaderSize(conn, 8192), rc4key),
+		reader: bufio.NewReaderSize(NewRC4Reader(conn, rc4key), bufsize),
 		conn:   conn,
 		desc:   desc,
 	}

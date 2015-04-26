@@ -21,8 +21,6 @@ type Options struct {
 	Capacity          int
 	PacketSize        uint16
 	TunnelCount       int // low level tunnel count; only for client
-	TunnelReadBuffer  int
-	TunnelWriteBuffer int
 	HalfClosedLink    bool // support half closed connections, default:false
 }
 

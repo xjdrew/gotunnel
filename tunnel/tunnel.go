@@ -97,12 +97,6 @@ func (self *Tunnel) String() string {
 
 func newTunnel(conn *net.TCPConn, rc4key []byte) *Tunnel {
 	desc := fmt.Sprintf("tunnel[%s <-> %s]", conn.LocalAddr(), conn.RemoteAddr())
-	if err := conn.SetReadBuffer(options.TunnelReadBuffer); err != nil {
-		Error("%s set read buffer failed:%s", desc, err.Error())
-	}
-	if err := conn.SetWriteBuffer(options.TunnelWriteBuffer); err != nil {
-		Error("%s set read buffer failed:%s", desc, err.Error())
-	}
 	conn.SetKeepAlive(true)
 	conn.SetKeepAlivePeriod(time.Second * 60)
 	bufsize := int(options.PacketSize) * 2

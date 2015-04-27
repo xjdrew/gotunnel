@@ -80,7 +80,6 @@ func (self *TunnelClient) fetchHub() *Hub {
 			return hub
 		}
 	}
-	Panic("no active tunnel")
 	return nil
 }
 
@@ -106,6 +105,11 @@ func (self *TunnelClient) listen() {
 		}
 		Info("new connection from %v", conn.RemoteAddr())
 		hub := self.fetchHub()
+        if hub == nil {
+            Error("no active hub")
+            conn.Close()
+            continue
+        }
 
 		tcpConn := conn.(*net.TCPConn)
 		tcpConn.SetKeepAlive(true)

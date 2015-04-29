@@ -1,21 +1,17 @@
 ## gotunnel
-gotunnel在客户端和服务器之间建立一条tcp连接作为隧道，客户端和服务器把所有应用连接上的请求回应打包成字节流加密后通过隧道传输到对端，并把字节流还原到相应的连接上去，使隧道对应用层透明。
+gotunnel是一个加密tcp隧道, 可以透明的加到任意使用tcp协议的应用和服务器之间，提供认证、加密和高效数据传输的能力。
 
-通过使用gotunnel，可以减少客户端和服务器之间频繁的连接建立和断开，提升应用的效率，尤其是他们之间隔着防火墙的时候。
+根据启动参数的不同，gotunnel可以客户端或者服务器端的模式工作。
 
-### tunnel stack
+客户端启动的时候会同服务器端建立<tunnel_count>条tcp连接，每条连接使用<secret>校验，并交换随机数作为后续的加密密钥。如果在运行过程中，连接断开，gotunnel会自动重连。
 
-SOURCE   | DESTINATION
-:--------|------------:
-TcpConn  | TCPConn
-Link     | Link
-Hub      | Hub
-Tunnel   | Tunnel
+当客户端收到应用发来的连接请求时，会同服务器协商，建立一条虚拟的link；服务器同应用服务器之间建立一条tcp连接，并同虚拟link关联起来。 通过使用gotunnel，可以减少客户端和服务器之间频繁的连接建立和断开，提升应用的效率，尤其是他们之间隔着防火墙的时候。
 
-## build
-如果没有搭建过go 的workspace，参考install.sh里面的脚本
-
-go install gotunnel
+## install
+```bash
+go get -u git@github.com:xjdrew/gotunnel.git
+```
+如果没有搭建过go 的workspace，请参考install.sh里面的脚本
 
 ## run
 ```

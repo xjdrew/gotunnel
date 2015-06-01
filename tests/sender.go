@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 )
 
 func usage() {
@@ -26,12 +27,14 @@ func main() {
 		os.Exit(1)
 	}
 	w := conn.(*net.TCPConn)
-	w.CloseRead()
+	w.CloseWrite()
+
+	time.Sleep(10 * time.Second)
 
 	conn.Write([]byte(`hello
 this is sender, a deaf, cann't hear any music
 glad to talk to you,
 best regard
 `))
-	w.CloseWrite()
+	w.CloseRead()
 }

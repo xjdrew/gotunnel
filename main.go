@@ -48,7 +48,6 @@ func argsCheck() *tunnel.Options {
 	flag.IntVar(&options.LogLevel, "log", 1, "larger value for detail log")
 	flag.IntVar(&options.TunnelCount, "tunnel_count", 1, "tunnel count")
 	flag.StringVar(&options.Secret, "secret", "the answer to life, the universe and everything", "connection secret")
-	flag.BoolVar(&options.HalfClosedLink, "half_closed_link", false, "enable half-closed connection support")
 	flag.Usage = usage
 	flag.Parse()
 

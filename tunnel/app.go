@@ -12,16 +12,15 @@ import (
 )
 
 type Options struct {
-	Listen            string
-	Server            string // tunnel server or client
-	Count             int    // tunnel count underlayer
-	ConfigFile        string
-	LogLevel          int
-	Secret            string
-	Capacity          int
-	PacketSize        uint16
-	TunnelCount       int // low level tunnel count; only for client
-	HalfClosedLink    bool // support half closed connections, default:false
+	Listen      string
+	Server      string // tunnel server or client
+	Count       int    // tunnel count underlayer
+	ConfigFile  string
+	LogLevel    int
+	Secret      string
+	Capacity    int
+	PacketSize  uint16
+	TunnelCount int // low level tunnel count; only for client
 }
 
 var options *Options

@@ -61,23 +61,6 @@ func (self *Link) putData(data []byte) bool {
 	return self.rbuf.Put(data)
 }
 
-func (self *Link) handleError(readFailed bool) {
-	if !options.HalfClosedLink {
-		self.SendClose()
-		return
-	}
-
-	if readFailed {
-		if self.resetSflag() {
-			self.hub.Send(LINK_CLOSE_SEND, self.id, nil)
-		}
-	} else {
-		if self.resetRflag() {
-			self.hub.Send(LINK_CLOSE_RECV, self.id, nil)
-		}
-	}
-}
-
 // read from link
 func (self *Link) pumpIn() {
 	defer self.wg.Done()
@@ -89,9 +72,11 @@ func (self *Link) pumpIn() {
 		buffer := mpool.Get()
 		n, err := rd.Read(buffer)
 		if err != nil {
-			Debug("link(%d) read failed:%v", self.id, err)
-			self.handleError(true)
+			if self.resetSflag() {
+				self.hub.Send(LINK_CLOSE_SEND, self.id, nil)
+			}
 			mpool.Put(buffer)
+			Debug("link(%d) read failed:%v", self.id, err)
 			break
 		}
 		Trace("link(%d) read %d bytes:%s", self.id, n, string(buffer[:n]))
@@ -122,7 +107,9 @@ func (self *Link) pumpOut() {
 		mpool.Put(data)
 
 		if err != nil {
-			self.handleError(false)
+			if self.resetRflag() {
+				self.hub.Send(LINK_CLOSE_RECV, self.id, nil)
+			}
 			Debug("link(%d) write failed:%v", self.id, err)
 			break
 		}

@@ -8,91 +8,110 @@ package tunnel
 import (
 	"bufio"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"net"
 	"sync"
 	"time"
 )
 
-type TunnelPayload struct {
-	Linkid uint16
-	Data   []byte
-}
-
-type TunnelHeader struct {
-	Linkid uint16
-	Sz     uint16
+type Payload struct {
+	linkid uint16
+	data   []byte
 }
 
 type Tunnel struct {
-	wlock  *sync.Mutex   // write lock
-	writer *bufio.Writer // writer
-	rlock  *sync.Mutex   // read lock
-	reader *bufio.Reader // reader
 	conn   *net.TCPConn  // low level conn
-	desc   string        // description
+	writer *bufio.Writer // writer
+	reader *bufio.Reader // reader
+	wch    chan Payload  // write data chan
+	closed chan struct{} // connection closed
+	once   sync.Once
+	desc   string // description
+}
+
+func (t *Tunnel) shutdown() {
+	t.conn.Close()
+	close(t.closed)
 }
 
 func (t *Tunnel) Close() {
-	t.conn.Close()
+	t.once.Do(t.shutdown)
 }
 
-func (t *Tunnel) Write(payload TunnelPayload) (err error) {
-	defer mpool.Put(payload.Data)
-
-	var header TunnelHeader
-	header.Linkid = payload.Linkid
-	header.Sz = uint16(len(payload.Data))
-
-	t.wlock.Lock()
-	defer t.wlock.Unlock()
-	if err = binary.Write(t.writer, binary.LittleEndian, &header); err != nil {
-		return
+func (t *Tunnel) write(payload Payload) error {
+	defer mpool.Put(payload.data)
+	if err := binary.Write(t.writer, binary.LittleEndian, payload.linkid); err != nil {
+		return err
 	}
-	if _, err = t.writer.Write(payload.Data); err != nil {
-		return
+	if err := binary.Write(t.writer, binary.LittleEndian, uint16(len(payload.data))); err != nil {
+		return err
 	}
-	if err = t.writer.Flush(); err != nil {
-		return
+	if _, err := t.writer.Write(payload.data); err != nil {
+		return err
 	}
-	return
+	if err := t.writer.Flush(); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (t *Tunnel) Read() (payload *TunnelPayload, err error) {
-	t.rlock.Lock()
-	defer t.rlock.Unlock()
-
-	var header TunnelHeader
-	err = binary.Read(t.reader, binary.LittleEndian, &header)
-	if err != nil {
-		return
-	}
-
-	if header.Sz > options.PacketSize {
-		err = errors.New("malformed packet, too long")
-		return
-	}
-
-	payload = &TunnelPayload{}
-	payload.Linkid = header.Linkid
-	data := mpool.Get()[0:header.Sz]
-	c := 0
-	for c < int(header.Sz) {
-		var n int
-		n, err = t.reader.Read(data[c:])
-		if err != nil {
-			mpool.Put(data)
+func (t *Tunnel) Pump() {
+	for {
+		select {
+		case payload := <-t.wch:
+			if err := t.write(payload); err != nil {
+				t.once.Do(t.shutdown)
+				Error("%s write failed:%v", t.desc, err)
+				return
+			}
+		case <-t.closed:
+			Error("%s closed", t.desc)
 			return
+		}
+	}
+}
+
+func (t *Tunnel) Write(payload Payload) bool {
+	select {
+	case t.wch <- payload:
+		return true
+	case <-t.closed:
+		return false
+	}
+}
+
+func (t *Tunnel) Read() (Payload, error) {
+	var payload Payload
+	var linkid, sz uint16
+
+	if err := binary.Read(t.reader, binary.LittleEndian, &linkid); err != nil {
+		return payload, err
+	}
+
+	if err := binary.Read(t.reader, binary.LittleEndian, &sz); err != nil {
+		return payload, err
+	}
+
+	if sz > options.PacketSize {
+		return payload, fmt.Errorf("malformed packet, size:%d", sz)
+	}
+
+	data := mpool.Get()[0:sz]
+	c := 0
+	for c < int(sz) {
+		n, err := t.reader.Read(data[c:])
+		if err != nil {
+			return payload, err
 		}
 		c += n
 	}
-	payload.Data = data
-	return
+	payload.linkid = linkid
+	payload.data = data
+	return payload, nil
 }
 
 func (self *Tunnel) String() string {
-	return fmt.Sprintf("%s", self.desc)
+	return self.desc
 }
 
 func newTunnel(conn *net.TCPConn, rc4key []byte) *Tunnel {
@@ -101,10 +120,10 @@ func newTunnel(conn *net.TCPConn, rc4key []byte) *Tunnel {
 	conn.SetKeepAlivePeriod(time.Second * 60)
 	bufsize := int(options.PacketSize) * 2
 	return &Tunnel{
-		wlock:  new(sync.Mutex),
 		writer: bufio.NewWriterSize(NewRC4Writer(conn, rc4key), bufsize),
-		rlock:  new(sync.Mutex),
 		reader: bufio.NewReaderSize(NewRC4Reader(conn, rc4key), bufsize),
+		wch:    make(chan Payload),
+		closed: make(chan struct{}),
 		conn:   conn,
 		desc:   desc,
 	}

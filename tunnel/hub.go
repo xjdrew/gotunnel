@@ -39,36 +39,28 @@ func (self *Hub) SetCtrlDelegate(delegate CtrlDelegate) {
 }
 
 func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
-	var payload TunnelPayload
+	var payload Payload
 	switch cmd {
 	case LINK_DATA:
+		payload.linkid = linkid
+		payload.data = data
 		Info("link(%d) send %d bytes data", linkid, len(data))
-
-		payload.Linkid = linkid
-		payload.Data = data
 	default:
-		Info("link(%d) send cmd:%d", linkid, cmd)
-
 		buf := bytes.NewBuffer(mpool.Get()[0:0])
 		var body CmdPayload
 		body.Cmd = cmd
 		body.Linkid = linkid
 		binary.Write(buf, binary.LittleEndian, &body)
 
-		payload.Linkid = 0
-		payload.Data = buf.Bytes()
+		payload.linkid = 0
+		payload.data = buf.Bytes()
+		Info("link(%d) send cmd:%d", linkid, cmd)
 	}
 
-	err := self.tunnel.Write(payload)
-	if err != nil {
-		Error("%s write failed:%v", self.tunnel.String(), err)
-		return false
-	}
-
-	return true
+	return self.tunnel.Write(payload)
 }
 
-func (self *Hub) ctrl(cmd CmdPayload) {
+func (self *Hub) onCtrl(cmd CmdPayload) {
 	if self.delegate != nil && self.delegate.Ctrl(cmd) {
 		return
 	}
@@ -92,18 +84,17 @@ func (self *Hub) ctrl(cmd CmdPayload) {
 	}
 }
 
-func (self *Hub) data(payload *TunnelPayload) {
-	linkid := payload.Linkid
+func (self *Hub) onData(linkid uint16, data []byte) {
 	link := self.getLink(linkid)
 
 	if link == nil {
-		mpool.Put(payload.Data)
+		mpool.Put(data)
 		Error("link(%d) no link", linkid)
 		return
 	}
 
-	if !link.putData(payload.Data) {
-		mpool.Put(payload.Data)
+	if !link.putData(data) {
+		mpool.Put(data)
 		Error("link(%d) put data failed", linkid)
 		return
 	}
@@ -113,6 +104,9 @@ func (self *Hub) data(payload *TunnelPayload) {
 func (self *Hub) dispatch() {
 	defer self.tunnel.Close()
 
+	// start write goroutine
+	go self.tunnel.Pump()
+
 	var cmd CmdPayload
 	for {
 		payload, err := self.tunnel.Read()
@@ -121,19 +115,20 @@ func (self *Hub) dispatch() {
 			break
 		}
 
-		if payload.Linkid == 0 {
-			buf := bytes.NewBuffer(payload.Data)
+		linkid, data := payload.linkid, payload.data
+		if linkid == 0 {
+			buf := bytes.NewBuffer(data)
 			err := binary.Read(buf, binary.LittleEndian, &cmd)
-			mpool.Put(payload.Data)
+			mpool.Put(data)
 			if err != nil {
 				Error("parse message failed:%s, break dispatch", err.Error())
 				break
 			}
 			Info("link(%d) recv cmd:%d", cmd.Linkid, cmd.Cmd)
-			self.ctrl(cmd)
+			self.onCtrl(cmd)
 		} else {
-			Info("link(%d) recv %d bytes data", payload.Linkid, len(payload.Data))
-			self.data(payload)
+			Info("link(%d) recv %d bytes data", linkid, len(data))
+			self.onData(linkid, data)
 		}
 	}
 }

@@ -31,7 +31,7 @@ func handleConn(conn *net.TCPConn) {
 
 func main() {
 	var listen string
-	flag.StringVar(&listen, ":listen", ":7002", "listen")
+	flag.StringVar(&listen, "listen", ":7002", "listen")
 	flag.Usage = usage
 	flag.Parse()
 

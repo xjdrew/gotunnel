@@ -80,7 +80,7 @@ func (self *App) Status() {
 	for _, service := range self.services {
 		service.Status()
 	}
-	LogStack("<status> num goroutine: %d, pool %d(%d)", runtime.NumGoroutine(), mpool.Used(), mpool.Alloced())
+	LogStack("<status> num goroutine: %d, pool %d/%d/%d", runtime.NumGoroutine(), mpool.Used(), mpool.Freed(), mpool.Alloced())
 }
 
 func NewApp(o *Options) *App {

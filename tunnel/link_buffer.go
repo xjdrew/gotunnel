@@ -67,20 +67,18 @@ func (b *LinkBuffer) Put(data []byte) bool {
 	return true
 }
 
-func (b *LinkBuffer) Pop() (data []byte, ok bool) {
+func (b *LinkBuffer) Pop() ([]byte, bool) {
 	for {
 		b.cond.L.Lock()
-		ok = true
 		if b.bufferLen() > 0 {
-			data = b.buf[b.start]
+			data := b.buf[b.start]
 			b.start = (b.start + 1) % cap(b.buf)
 			b.cond.L.Unlock()
-			return
+			return data, true
 		}
 		if b.closed {
-			ok = false
 			b.cond.L.Unlock()
-			return
+			return nil, false
 		}
 		b.cond.Wait()
 		b.cond.L.Unlock()

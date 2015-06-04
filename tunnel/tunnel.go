@@ -40,6 +40,7 @@ func (t *Tunnel) Close() {
 
 func (t *Tunnel) write(payload Payload) error {
 	defer mpool.Put(payload.data)
+
 	if err := binary.Write(t.writer, binary.LittleEndian, payload.linkid); err != nil {
 		return err
 	}

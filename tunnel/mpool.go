@@ -14,6 +14,7 @@ type MPool struct {
 	pool    *sync.Pool
 	alloced int32
 	used    int32
+	freed   int32
 	sz      int
 }
 
@@ -24,13 +25,17 @@ func (p *MPool) Get() []byte {
 
 func (p *MPool) Put(x []byte) {
 	if cap(x) == p.sz {
-		atomic.AddInt32(&p.used, -1)
+		atomic.AddInt32(&p.freed, 1)
 		p.pool.Put(x[0:p.sz])
 	}
 }
 
 func (p *MPool) Alloced() int32 {
 	return p.alloced
+}
+
+func (p *MPool) Freed() int32 {
+	return p.freed
 }
 
 func (p *MPool) Used() int32 {

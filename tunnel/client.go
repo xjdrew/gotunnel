@@ -13,15 +13,15 @@ import (
 	"time"
 )
 
-type TunnelClient struct {
-	ln   net.Listener
+type Client struct {
+	app  *App
 	hubs []*Hub
 	off  int // current hub
 	wg   sync.WaitGroup
 }
 
-func (self *TunnelClient) createHub() (hub *Hub, err error) {
-	conn, err := net.Dial("tcp", options.Server)
+func (cli *Client) createHub() (hub *Hub, err error) {
+	conn, err := net.DialTCP("tcp", nil, cli.app.baddr)
 	if err != nil {
 		return
 	}
@@ -35,7 +35,7 @@ func (self *TunnelClient) createHub() (hub *Hub, err error) {
 	}
 	Debug("challenge(%v), len %d, %v", conn.RemoteAddr(), len(challenge), challenge)
 
-	a := NewTaa(options.Secret)
+	a := NewTaa(cli.app.Secret)
 	token, ok := a.ExchangeCipherBlock(challenge)
 	if !ok {
 		err = errors.New("exchange chanllenge failed")
@@ -49,11 +49,11 @@ func (self *TunnelClient) createHub() (hub *Hub, err error) {
 		return
 	}
 
-	hub = newHub(newTunnel(conn.(*net.TCPConn), a.GetRc4key()))
+	hub = newHub(newTunnel(conn, a.GetRc4key()), true)
 	return
 }
 
-func (self *TunnelClient) handleConn(hub *Hub, conn BiConn) {
+func (cli *Client) handleConn(hub *Hub, conn BiConn) {
 	defer conn.Close()
 	defer Recover()
 
@@ -72,10 +72,10 @@ func (self *TunnelClient) handleConn(hub *Hub, conn BiConn) {
 	link.Pump(conn)
 }
 
-func (self *TunnelClient) fetchHub() *Hub {
-	for i := 0; i < len(self.hubs); i++ {
-		hub := self.hubs[self.off]
-		self.off = (self.off + 1) % len(self.hubs)
+func (cli *Client) fetchHub() *Hub {
+	for i := 0; i < len(cli.hubs); i++ {
+		hub := cli.hubs[cli.off]
+		cli.off = (cli.off + 1) % len(cli.hubs)
 		if hub != nil {
 			return hub
 		}
@@ -83,17 +83,16 @@ func (self *TunnelClient) fetchHub() *Hub {
 	return nil
 }
 
-func (self *TunnelClient) listen() {
-	defer self.wg.Done()
+func (cli *Client) listen() {
+	defer cli.wg.Done()
 
-	var err error
-	self.ln, err = net.Listen("tcp", options.Listen)
+	ln, err := net.ListenTCP("tcp", cli.app.laddr)
 	if err != nil {
 		Panic("listen failed:%v", err)
 	}
 
 	for {
-		conn, err := self.ln.Accept()
+		conn, err := ln.AcceptTCP()
 		if err != nil {
 			Log("acceept failed:%s", err.Error())
 			if opErr, ok := err.(*net.OpError); ok {
@@ -104,29 +103,28 @@ func (self *TunnelClient) listen() {
 			continue
 		}
 		Info("new connection from %v", conn.RemoteAddr())
-		hub := self.fetchHub()
-        if hub == nil {
-            Error("no active hub")
-            conn.Close()
-            continue
-        }
+		hub := cli.fetchHub()
+		if hub == nil {
+			Error("no active hub")
+			conn.Close()
+			continue
+		}
 
-		tcpConn := conn.(*net.TCPConn)
-		tcpConn.SetKeepAlive(true)
-		tcpConn.SetKeepAlivePeriod(time.Second * 60)
-		go self.handleConn(hub, tcpConn)
+		conn.SetKeepAlive(true)
+		conn.SetKeepAlivePeriod(time.Second * 60)
+		go cli.handleConn(hub, conn)
 	}
 }
 
-func (self *TunnelClient) Start() error {
-	done := make(chan error, len(self.hubs))
-	for i := 0; i < len(self.hubs); i++ {
+func (cli *Client) Start() error {
+	done := make(chan error, len(cli.hubs))
+	for i := 0; i < len(cli.hubs); i++ {
 		go func(index int) {
 			Recover()
 
 			first := true
 			for {
-				hub, err := self.createHub()
+				hub, err := cli.createHub()
 				if first {
 					first = false
 					done <- err
@@ -141,46 +139,40 @@ func (self *TunnelClient) Start() error {
 				}
 
 				Error("tunnel %d connect succeed", index)
-				self.hubs[index] = hub
+				cli.hubs[index] = hub
 				hub.Start()
-				self.hubs[index] = nil
+				cli.hubs[index] = nil
 				Error("tunnel %d disconnected", index)
 			}
 		}(i)
 	}
 
-	for i := 0; i < len(self.hubs); i++ {
+	for i := 0; i < len(cli.hubs); i++ {
 		err := <-done
 		if err != nil {
 			return err
 		}
 	}
 
-	self.wg.Add(1)
-	go self.listen()
+	cli.wg.Add(1)
+	go cli.listen()
 	return nil
 }
 
-func (self *TunnelClient) Reload() error {
-	return nil
-}
-
-func (self *TunnelClient) Wait() {
-	self.wg.Wait()
+func (cli *Client) Wait() {
+	cli.wg.Wait()
 	Log("tunnel client quit")
 }
 
-func (self *TunnelClient) Status() {
-	for _, hub := range self.hubs {
+func (cli *Client) Status() {
+	for _, hub := range cli.hubs {
 		hub.Status()
 	}
 }
 
-func NewTunnelClient() *TunnelClient {
-	count := 1
-	if options.TunnelCount > 0 {
-		count = options.TunnelCount
+func newClient(app *App) *Client {
+	return &Client{
+		app:  app,
+		hubs: make([]*Hub, app.Tunnels),
 	}
-	return &TunnelClient{
-		hubs: make([]*Hub, count)}
 }

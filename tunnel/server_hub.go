@@ -51,10 +51,10 @@ func (self *ServerHub) Ctrl(cmd *Cmd) bool {
 }
 
 func newServerHub(tunnel *Tunnel, app *App) *ServerHub {
-	serverHub := new(ServerHub)
-	serverHub.app = app
+	ServerHub := new(ServerHub)
+	ServerHub.app = app
 	hub := newHub(tunnel, false)
-	hub.SetCtrlDelegate(serverHub)
-	serverHub.Hub = hub
-	return serverHub
+	hub.SetCtrlDelegate(ServerHub)
+	ServerHub.Hub = hub
+	return ServerHub
 }

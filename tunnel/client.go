@@ -6,6 +6,7 @@
 package tunnel
 
 import (
+	"container/heap"
 	"errors"
 	"io"
 	"net"
@@ -15,12 +16,12 @@ import (
 
 type Client struct {
 	app  *App
-	hubs []*Hub
-	off  int // current hub
+	cq   HubQueue
+	lock sync.Mutex
 	wg   sync.WaitGroup
 }
 
-func (cli *Client) createHub() (hub *Hub, err error) {
+func (cli *Client) createHub() (hub *HubItem, err error) {
 	conn, err := net.DialTCP("tcp", nil, cli.app.baddr)
 	if err != nil {
 		return
@@ -49,13 +50,48 @@ func (cli *Client) createHub() (hub *Hub, err error) {
 		return
 	}
 
-	hub = newHub(newTunnel(conn, a.GetRc4key()), true)
+	hub = &HubItem{
+		Hub: newHub(newTunnel(conn, a.GetRc4key()), true),
+	}
 	return
 }
 
-func (cli *Client) handleConn(hub *Hub, conn BiConn) {
+func (cli *Client) addHub(item *HubItem) {
+	cli.lock.Lock()
+	heap.Push(&cli.cq, item)
+	cli.lock.Unlock()
+}
+
+func (cli *Client) removeHub(item *HubItem) {
+	cli.lock.Lock()
+	heap.Remove(&cli.cq, item.index)
+	cli.lock.Unlock()
+}
+
+func (cli *Client) fetchHub() *HubItem {
+	defer cli.lock.Unlock()
+	cli.lock.Lock()
+
+	if len(cli.cq) == 0 {
+		return nil
+	}
+	item := cli.cq[0]
+	item.priority += 1
+	heap.Fix(&cli.cq, 0)
+	return item
+}
+
+func (cli *Client) dropHub(item *HubItem) {
+	cli.lock.Lock()
+	item.priority -= 1
+	heap.Fix(&cli.cq, item.index)
+	cli.lock.Unlock()
+}
+
+func (cli *Client) handleConn(hub *HubItem, conn BiConn) {
 	defer conn.Close()
 	defer Recover()
+	defer cli.dropHub(hub)
 
 	linkid := hub.AcquireId()
 	if linkid == 0 {
@@ -70,17 +106,6 @@ func (cli *Client) handleConn(hub *Hub, conn BiConn) {
 
 	link.SendCreate()
 	link.Pump(conn)
-}
-
-func (cli *Client) fetchHub() *Hub {
-	for i := 0; i < len(cli.hubs); i++ {
-		hub := cli.hubs[cli.off]
-		cli.off = (cli.off + 1) % len(cli.hubs)
-		if hub != nil {
-			return hub
-		}
-	}
-	return nil
 }
 
 func (cli *Client) listen() {
@@ -117,8 +142,9 @@ func (cli *Client) listen() {
 }
 
 func (cli *Client) Start() error {
-	done := make(chan error, len(cli.hubs))
-	for i := 0; i < len(cli.hubs); i++ {
+	sz := cap(cli.cq)
+	done := make(chan error, sz)
+	for i := 0; i < sz; i++ {
 		go func(index int) {
 			Recover()
 
@@ -134,20 +160,20 @@ func (cli *Client) Start() error {
 					}
 				} else if err != nil {
 					Error("tunnel %d reconnect failed", index)
-					time.Sleep(time.Second)
+					time.Sleep(time.Second * 3)
 					continue
 				}
 
 				Error("tunnel %d connect succeed", index)
-				cli.hubs[index] = hub
+				cli.addHub(hub)
 				hub.Start()
-				cli.hubs[index] = nil
+				cli.removeHub(hub)
 				Error("tunnel %d disconnected", index)
 			}
 		}(i)
 	}
 
-	for i := 0; i < len(cli.hubs); i++ {
+	for i := 0; i < sz; i++ {
 		err := <-done
 		if err != nil {
 			return err
@@ -165,14 +191,14 @@ func (cli *Client) Wait() {
 }
 
 func (cli *Client) Status() {
-	for _, hub := range cli.hubs {
+	for _, hub := range cli.cq {
 		hub.Status()
 	}
 }
 
 func newClient(app *App) *Client {
 	return &Client{
-		app:  app,
-		hubs: make([]*Hub, app.Tunnels),
+		app: app,
+		cq:  make(HubQueue, app.Tunnels)[0:0],
 	}
 }

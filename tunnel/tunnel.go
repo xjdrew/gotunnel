@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -56,7 +57,7 @@ func (t *Tunnel) write(payload Payload) error {
 	return nil
 }
 
-func (t *Tunnel) Pump() {
+func (t *Tunnel) pump() {
 	for {
 		select {
 		case payload := <-t.wch:
@@ -93,18 +94,9 @@ func (t *Tunnel) Read() (Payload, error) {
 		return payload, err
 	}
 
-	if sz > options.PacketSize {
-		return payload, fmt.Errorf("malformed packet, size:%d", sz)
-	}
-
 	data := mpool.Get()[0:sz]
-	c := 0
-	for c < int(sz) {
-		n, err := t.reader.Read(data[c:])
-		if err != nil {
-			return payload, err
-		}
-		c += n
+	if _, err := io.ReadFull(t.reader, data); err != nil {
+		return payload, err
 	}
 	payload.linkid = linkid
 	payload.data = data
@@ -119,8 +111,8 @@ func newTunnel(conn *net.TCPConn, rc4key []byte) *Tunnel {
 	desc := fmt.Sprintf("tunnel[%s <-> %s]", conn.LocalAddr(), conn.RemoteAddr())
 	conn.SetKeepAlive(true)
 	conn.SetKeepAlivePeriod(time.Second * 60)
-	bufsize := int(options.PacketSize) * 2
-	return &Tunnel{
+	bufsize := int(PacketSize) * 2
+	tunnel := &Tunnel{
 		writer: bufio.NewWriterSize(NewRC4Writer(conn, rc4key), bufsize),
 		reader: bufio.NewReaderSize(NewRC4Reader(conn, rc4key), bufsize),
 		wch:    make(chan Payload),
@@ -128,4 +120,7 @@ func newTunnel(conn *net.TCPConn, rc4key []byte) *Tunnel {
 		conn:   conn,
 		desc:   desc,
 	}
+
+	go tunnel.pump()
+	return tunnel
 }

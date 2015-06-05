@@ -18,13 +18,13 @@ const (
 	LINK_CLOSE_SEND
 )
 
-type CmdPayload struct {
+type Cmd struct {
 	Cmd    uint8
 	Linkid uint16
 }
 
 type CtrlDelegate interface {
-	Ctrl(cmd CmdPayload) bool
+	Ctrl(cmd *Cmd) bool
 }
 
 type Hub struct {
@@ -47,7 +47,7 @@ func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
 		Info("link(%d) send %d bytes data", linkid, len(data))
 	default:
 		buf := bytes.NewBuffer(mpool.Get()[0:0])
-		var body CmdPayload
+		var body Cmd
 		body.Cmd = cmd
 		body.Linkid = linkid
 		binary.Write(buf, binary.LittleEndian, &body)
@@ -60,7 +60,7 @@ func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
 	return self.tunnel.Write(payload)
 }
 
-func (self *Hub) onCtrl(cmd CmdPayload) {
+func (self *Hub) onCtrl(cmd *Cmd) {
 	if self.delegate != nil && self.delegate.Ctrl(cmd) {
 		return
 	}
@@ -104,10 +104,7 @@ func (self *Hub) onData(linkid uint16, data []byte) {
 func (self *Hub) dispatch() {
 	defer self.tunnel.Close()
 
-	// start write goroutine
-	go self.tunnel.Pump()
-
-	var cmd CmdPayload
+	var cmd Cmd
 	for {
 		payload, err := self.tunnel.Read()
 		if err != nil {
@@ -125,7 +122,7 @@ func (self *Hub) dispatch() {
 				break
 			}
 			Info("link(%d) recv cmd:%d", cmd.Linkid, cmd.Cmd)
-			self.onCtrl(cmd)
+			self.onCtrl(&cmd)
 		} else {
 			Info("link(%d) recv %d bytes data", linkid, len(data))
 			self.onData(linkid, data)
@@ -138,7 +135,7 @@ func (self *Hub) Start() {
 
 	// tunnel disconnect, so reset all link
 	Info("reset all link")
-	for i := uint16(1); i < self.LinkSet.capacity; i++ {
+	for i := uint16(1); i < MaxLinkPerTunnel; i++ {
 		link := self.getLink(i)
 		if link != nil {
 			link.resetRSflag()
@@ -150,7 +147,7 @@ func (self *Hub) Start() {
 func (self *Hub) Status() {
 	total := 0
 	links := make([]uint16, 100)
-	for i := uint16(0); i < self.capacity; i++ {
+	for i := uint16(0); i < MaxLinkPerTunnel; i++ {
 		if self.links[i] != nil {
 			if total < cap(links) {
 				links[total] = i
@@ -176,9 +173,9 @@ func (self *Hub) ReleaseLink(linkid uint16) bool {
 	return self.resetLink(linkid)
 }
 
-func newHub(tunnel *Tunnel) *Hub {
+func newHub(tunnel *Tunnel, client bool) *Hub {
 	hub := new(Hub)
-	hub.LinkSet = newLinkSet(uint16(options.Capacity))
+	hub.LinkSet = newLinkSet(client)
 	hub.tunnel = tunnel
 	return hub
 }

@@ -74,6 +74,10 @@ func NewTaa(key string) *Taa {
 	}
 }
 
+func init() {
+	rand.Seed(time.Now().Unix())
+}
+
 // generate new token
 func (a *Taa) GenToken() {
 	a.token.challenge = uint64(rand.Int63())

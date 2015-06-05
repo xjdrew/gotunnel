@@ -5,85 +5,60 @@
 package tunnel
 
 import (
-	"math/rand"
+	"net"
 	"runtime"
-	"sync"
-	"time"
 )
 
-type Options struct {
-	Listen      string
-	Server      string // tunnel server or client
-	Count       int    // tunnel count underlayer
-	ConfigFile  string
-	LogLevel    int
-	Secret      string
-	Capacity    int
-	PacketSize  uint16
-	TunnelCount int // low level tunnel count; only for client
-}
+const (
+	MaxLinkPerTunnel = 1024
+	PacketSize       = 8192
+)
 
-var options *Options
-var mpool *MPool
-
-func init() {
-	rand.Seed(time.Now().Unix())
-}
+var (
+	mpool = NewMPool(PacketSize)
+)
 
 type Service interface {
 	Start() error
-	Reload() error
 	Wait()
 	Status()
 }
 
 type App struct {
-	services []Service
-	wg       sync.WaitGroup
+	Listen  string
+	Backend string // tunnel server or client
+	Secret  string
+	Tunnels uint // low level tunnel count; 0 if work as server
+
+	laddr   *net.TCPAddr
+	baddr   *net.TCPAddr
+	service Service
 }
 
-func (self *App) Add(service Service) {
-	self.services = append(self.services, service)
-}
-
-func (self *App) Start() error {
-	mpool = NewMPool(int(options.PacketSize))
-	for _, service := range self.services {
-		err := service.Start()
-		if err != nil {
-			return err
-		}
+func (app *App) Start() error {
+	var err error
+	if app.laddr, err = net.ResolveTCPAddr("tcp", app.Listen); err != nil {
+		return err
 	}
 
-	for _, service := range self.services {
-		self.wg.Add(1)
-		go func(s Service) {
-			defer self.wg.Done()
-			s.Wait()
-			Info("service finish: %v", s)
-		}(service)
+	if app.baddr, err = net.ResolveTCPAddr("tcp", app.Backend); err != nil {
+		return err
 	}
-	return nil
+
+	if app.Tunnels == 0 {
+		app.service = newServer(app)
+	} else {
+		app.service = newClient(app)
+	}
+	err = app.service.Start()
+	return err
 }
 
-func (self *App) Reload() {
-	for _, service := range self.services {
-		service.Reload()
-	}
+func (app *App) Wait() {
+	app.service.Wait()
 }
 
-func (self *App) Wait() {
-	self.wg.Wait()
-}
-
-func (self *App) Status() {
-	for _, service := range self.services {
-		service.Status()
-	}
+func (app *App) Status() {
+	app.service.Status()
 	LogStack("<status> num goroutine: %d, pool %d/%d/%d", runtime.NumGoroutine(), mpool.Used(), mpool.Freed(), mpool.Alloced())
-}
-
-func NewApp(o *Options) *App {
-	options = o
-	return new(App)
 }

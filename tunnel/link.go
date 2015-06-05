@@ -66,7 +66,7 @@ func (self *Link) pumpIn() {
 	defer self.wg.Done()
 	defer self.conn.CloseRead()
 
-	bufsize := int(options.PacketSize) * 2
+	bufsize := PacketSize * 2
 	rd := bufio.NewReaderSize(self.conn, bufsize)
 	for {
 		buffer := mpool.Get()

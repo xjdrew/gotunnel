@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-var Timeout uint = 10 // tunnel read/write timeout
+var Timeout int64 // tunnel read/write timeout
 
 type Payload struct {
 	linkid uint16
@@ -101,7 +101,7 @@ func (t *Tunnel) Read() (Payload, error) {
 	data := mpool.Get()[0:sz]
 	// timeout if can't read a packet in 10 seconds
 	if Timeout > 0 {
-		t.conn.SetReadDeadline(time.Now().Add(time.Duration(Timeout)))
+		t.conn.SetReadDeadline(time.Now().Add(time.Duration(Timeout) * time.Second))
 	}
 	if _, err := io.ReadFull(t.reader, data); err != nil {
 		return payload, err

@@ -94,6 +94,8 @@ func (t *Tunnel) Read() (Payload, error) {
 		return payload, err
 	}
 
+	// timeout if can't read a packet in 10 seconds
+	t.conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	data := mpool.Get()[0:sz]
 	if _, err := io.ReadFull(t.reader, data); err != nil {
 		return payload, err

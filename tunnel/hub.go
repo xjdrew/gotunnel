@@ -134,11 +134,12 @@ func (self *Hub) Start() {
 	self.dispatch()
 
 	// tunnel disconnect, so reset all link
-	Info("reset all link")
+	Error("reset all link")
 	for i := uint16(1); i < MaxLinkPerTunnel; i++ {
 		link := self.getLink(i)
 		if link != nil {
 			link.resetRSflag()
+			Error("link(%d) reset", i)
 		}
 	}
 	Log("hub(%s) quit", self.tunnel.String())

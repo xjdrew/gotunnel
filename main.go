@@ -42,8 +42,8 @@ func main() {
 	baddr := flag.String("backend", "127.0.0.1:1234", "backend address")
 	secret := flag.String("secret", "the answer to life, the universe and everything", "tunnel secret")
 	tunnels := flag.Uint("tunnels", 1, "low level tunnel count, 0 if work as server")
-	flag.Int64Var(&tunnel.Timeout, "timeout", 1, "tunnel read/write timeout")
-	flag.UintVar(&tunnel.LogLevel, "log", 10, "log level")
+	flag.Int64Var(&tunnel.Timeout, "timeout", 10, "tunnel read/write timeout")
+	flag.UintVar(&tunnel.LogLevel, "log", 1, "log level")
 
 	flag.Usage = usage
 	flag.Parse()

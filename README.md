@@ -9,7 +9,7 @@ to
 ```
 client <-> gotunnel <--------------> gotunnel <-> server
 ```
-to get gotunnel's secure and persistent feature.
+to gain gotunnel's valuable features, such as secure and persistent. 
 
 ## build
 
@@ -32,13 +32,13 @@ usage: bin/gotunnel
 ```
 
 some options:
-* secret: for authenticate and exchange encryption key
+* secret: for authentication and exchanging encryption key
 * tunnels: 0 means gotunnel will and as server; Any value larger than 0 means gotunnel will work as client, and build *tunnels* tcp connections to server.
 * timeout: if can't read a packet body in *timeout* seconds, will recreate this tunnel. It's useful if theres is a critical firewall between gotunnel client and server.
 
 
 ## Example
-Suppose you have a squid server, and you use it as a http proxy. Usually, you will use start the server:
+Suppose you have a squid server, and you use it as a http proxy. Usually, you will start the server:
 ```
 $ squid3 -a 8080
 ```
@@ -50,14 +50,15 @@ It works fine but all traffic between your server and pc is plaintext, so someon
 
 First, on your server, resart squid to listen on a local port, for example **127.0.0.1:3128**. Then start gotunnel server listen on 8080 and use **127.0.0.1:3128** as backend.
 ```
-$ ./gotunnel -log=10 -tunnels=0 -listen=:8080 -backend=127.0.0.1:3128 secret="your secret"
+$ ./gotunnel -tunnels=0 -listen=:8001 -backend=127.0.0.1:3128 secret="your secret" -log=10 
 ```
 Second, on your pc, start gotunnel client:
 ```
-$ ./gotunnel -log=10 -listen="127.0.0.1:8080" -backend="server:8001" -secret="your secret" tunnels=100
+$ ./gotunnel -tunnels=100 -listen="127.0.0.1:8080" -backend="server:8001" -secret="your secret" -log=10 
 ```
 
 Then you can use squid3 on you local port as before, but all your traffic is encrypted. 
+
 Besides that, you don't need to create and destory tcp connection between your pc and server, because gotunnel use long-live tcp connections as low tunnel. In most cases, it would be faster.
 
 ## licence

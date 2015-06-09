@@ -17,13 +17,13 @@ go get -u git@github.com:xjdrew/gotunnel.git
 
 ## run
 ```
-$ bin/gotunnel 
-usage: bin/gotunnel [configFile]
-  -listen=":8001": host:port gotunnel listen on
-  -log=1: larger value for detail log
-  -secret="the answer to life, the universe and everything": connection secret, disable if has none
-  -server="": server address, empty if work as server
-  -tunnel_count=1: underlayer tunnel count
+usage: bin/gotunnel
+  -backend="127.0.0.1:1234": backend address
+  -listen=":8001": listen address
+  -log=1: log level
+  -secret="the answer to life, the universe and everything": tunnel secret
+  -timeout=10: tunnel read/write timeout
+  -tunnels=1: low level tunnel count, 0 if work as server
 ```
 
 ## useage
@@ -34,13 +34,13 @@ $ go build src/github.com/xjdrew/gotunnel/tests/sender.go
 $ go build src/github.com/xjdrew/gotunnel/tests/receiver.go
 
 # launch tunnel server
-$ ./gotunnel -log=10 src/github.com/xjdrew/gotunnel/tests/test.conf
+$ ./gotunnel -log=10 -tunnels=0
 
 # launch tunnel client
-$ ./gotunnel -log=10 -listen=":8003" -server="127.0.0.1:8001"
+$ ./gotunnel -log=10 -listen=":8003" -backend="127.0.0.1:8001"
 
 # launch receiver
-$ ./receiver
+$ ./receiver -listen=:1234
 
 # lauch sender
 $ ./sender -remote=127.0.0.1:8003

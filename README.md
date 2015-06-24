@@ -19,7 +19,7 @@ go get -u git@github.com:xjdrew/gotunnel.git
 ```
 If you don't known how to create a golang workspace, please see [install.sh](https://github.com/xjdrew/gotunnel/blob/master/install.sh)
 
-## Useage
+## Usage
 
 ```
 usage: bin/gotunnel

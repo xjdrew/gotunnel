@@ -21,11 +21,17 @@ type Client struct {
 	wg   sync.WaitGroup
 }
 
+const (
+	dailTimeoutSeconds = 5 * time.Second
+)
+
 func (cli *Client) createHub() (hub *HubItem, err error) {
-	conn, err := net.DialTCP("tcp", nil, cli.app.baddr)
+	c, err := net.DialTimeout("tcp", cli.app.Backend, dailTimeoutSeconds)
 	if err != nil {
 		return
 	}
+
+	conn := c.(*net.TCPConn)
 	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
 
 	// auth
@@ -143,22 +149,13 @@ func (cli *Client) listen() {
 
 func (cli *Client) Start() error {
 	sz := cap(cli.cq)
-	done := make(chan error, sz)
 	for i := 0; i < sz; i++ {
 		go func(index int) {
 			Recover()
 
-			first := true
 			for {
 				hub, err := cli.createHub()
-				if first {
-					first = false
-					done <- err
-					if err != nil {
-						Error("tunnel %d connect failed", index)
-						break
-					}
-				} else if err != nil {
+				if err != nil {
 					Error("tunnel %d reconnect failed", index)
 					time.Sleep(time.Second * 3)
 					continue
@@ -171,13 +168,6 @@ func (cli *Client) Start() error {
 				Error("tunnel %d disconnected", index)
 			}
 		}(i)
-	}
-
-	for i := 0; i < sz; i++ {
-		err := <-done
-		if err != nil {
-			return err
-		}
 	}
 
 	cli.wg.Add(1)

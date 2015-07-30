@@ -32,6 +32,8 @@ func (cli *Client) createHub() (hub *HubItem, err error) {
 	}
 
 	conn := c.(*net.TCPConn)
+	conn.SetKeepAlive(true)
+	conn.SetKeepAlivePeriod(time.Second * 180)
 	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
 
 	// auth

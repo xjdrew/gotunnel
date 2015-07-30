@@ -117,8 +117,6 @@ func (self *Tunnel) String() string {
 
 func newTunnel(conn *net.TCPConn, rc4key []byte) *Tunnel {
 	desc := fmt.Sprintf("tunnel[%s <-> %s]", conn.LocalAddr(), conn.RemoteAddr())
-	conn.SetKeepAlive(true)
-	conn.SetKeepAlivePeriod(time.Second * 60)
 	bufsize := int(PacketSize) * 2
 	tunnel := &Tunnel{
 		writer: bufio.NewWriterSize(NewRC4Writer(conn, rc4key), bufsize),

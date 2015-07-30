@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"time"
 )
 
 type Server struct {
@@ -87,6 +88,8 @@ func (self *Server) listen() {
 			continue
 		}
 		Debug("back server, new connection from %v", conn.RemoteAddr())
+		conn.SetKeepAlive(true)
+		conn.SetKeepAlivePeriod(time.Second * 180)
 		self.wg.Add(1)
 		go self.handleConn(conn)
 	}

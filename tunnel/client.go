@@ -58,8 +58,9 @@ func (cli *Client) createHub() (hub *HubItem, err error) {
 		return
 	}
 
+	tunnel := newTunnel(conn, a.GetRc4key())
 	hub = &HubItem{
-		Hub: newHub(newTunnel(conn, a.GetRc4key()), true),
+		Hub: newHub(tunnel, true),
 	}
 	return
 }

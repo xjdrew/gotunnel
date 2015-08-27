@@ -61,7 +61,8 @@ func (self *Server) handleConn(conn *net.TCPConn) {
 		return
 	}
 
-	hub := newServerHub(newTunnel(conn, a.GetRc4key()), self.app)
+	tunnel := newTunnel(conn, a.GetRc4key())
+	hub := newServerHub(tunnel, self.app)
 	self.addHub(hub)
 	defer self.removeHub(hub)
 

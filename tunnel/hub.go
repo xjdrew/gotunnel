@@ -39,11 +39,8 @@ func (self *Hub) SetCtrlDelegate(delegate CtrlDelegate) {
 }
 
 func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
-	var payload Payload
 	switch cmd {
 	case LINK_DATA:
-		payload.linkid = linkid
-		payload.data = data
 		Info("link(%d) send %d bytes data", linkid, len(data))
 	default:
 		buf := bytes.NewBuffer(mpool.Get()[0:0])
@@ -52,12 +49,16 @@ func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
 		body.Linkid = linkid
 		binary.Write(buf, binary.LittleEndian, &body)
 
-		payload.linkid = 0
-		payload.data = buf.Bytes()
+		linkid = 0
+		data = buf.Bytes()
 		Info("link(%d) send cmd:%d", linkid, cmd)
 	}
 
-	return self.tunnel.Write(payload)
+	if err := self.tunnel.Write(linkid, data); err != nil {
+		Error("link(%d) write to %s failed:%s", linkid, self.tunnel, err.Error())
+		return false
+	}
+	return true
 }
 
 func (self *Hub) onCtrl(cmd *Cmd) {
@@ -106,13 +107,12 @@ func (self *Hub) dispatch() {
 
 	var cmd Cmd
 	for {
-		payload, err := self.tunnel.Read()
+		linkid, data, err := self.tunnel.Read()
 		if err != nil {
-			Error("%s read failed:%v", self.tunnel.String(), err)
+			Error("%s read failed:%v", self.tunnel, err)
 			break
 		}
 
-		linkid, data := payload.linkid, payload.data
 		if linkid == 0 {
 			buf := bytes.NewBuffer(data)
 			err := binary.Read(buf, binary.LittleEndian, &cmd)
@@ -142,7 +142,7 @@ func (self *Hub) Start() {
 			Error("link(%d) reset", i)
 		}
 	}
-	Log("hub(%s) quit", self.tunnel.String())
+	Log("hub(%s) quit", self.tunnel)
 }
 
 func (self *Hub) Status() {
@@ -159,7 +159,7 @@ func (self *Hub) Status() {
 	if total <= cap(links) {
 		links = links[:total]
 	}
-	Log("<status> %s, %d links(%v)", self.tunnel.String(), total, links)
+	Log("<status> %s, %d links(%v)", self.tunnel, total, links)
 }
 
 func (self *Hub) NewLink(linkid uint16) *Link {

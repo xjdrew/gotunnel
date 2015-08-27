@@ -6,7 +6,6 @@
 package tunnel
 
 import (
-	"bufio"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -17,116 +16,61 @@ import (
 
 var Timeout int64 // tunnel read/write timeout
 
-type Payload struct {
-	linkid uint16
-	data   []byte
+type header struct {
+	Linkid uint16
+	Len    uint16
 }
 
 type Tunnel struct {
-	conn   *net.TCPConn  // low level conn
-	writer *bufio.Writer // writer
-	reader *bufio.Reader // reader
-	wch    chan Payload  // write data chan
-	closed chan struct{} // connection closed
-	once   sync.Once
-	desc   string // description
+	*Conn
+	wlock sync.Mutex // protect concurrent write
 }
 
-func (t *Tunnel) shutdown() {
-	t.conn.Close()
-	close(t.closed)
-}
+// can write concurrently
+func (tun *Tunnel) Write(linkid uint16, data []byte) (err error) {
+	defer mpool.Put(data)
 
-func (t *Tunnel) Close() {
-	t.once.Do(t.shutdown)
-}
+	tun.wlock.Lock()
+	defer tun.wlock.Unlock()
 
-func (t *Tunnel) write(payload Payload) error {
-	defer mpool.Put(payload.data)
-
-	if err := binary.Write(t.writer, binary.LittleEndian, payload.linkid); err != nil {
+	if err = binary.Write(tun.Conn, binary.LittleEndian, header{linkid, uint16(len(data))}); err != nil {
 		return err
 	}
-	if err := binary.Write(t.writer, binary.LittleEndian, uint16(len(payload.data))); err != nil {
+	if _, err = tun.Conn.Write(data); err != nil {
 		return err
 	}
-	if _, err := t.writer.Write(payload.data); err != nil {
-		return err
-	}
-	if err := t.writer.Flush(); err != nil {
-		return err
-	}
-	return nil
+	return
 }
 
-func (t *Tunnel) pump() {
-	for {
-		select {
-		case payload := <-t.wch:
-			if err := t.write(payload); err != nil {
-				t.once.Do(t.shutdown)
-				Error("%s write failed:%v", t.desc, err)
-				return
-			}
-		case <-t.closed:
-			Error("%s closed", t.desc)
-			return
-		}
-	}
-}
-
-func (t *Tunnel) Write(payload Payload) bool {
-	select {
-	case t.wch <- payload:
-		return true
-	case <-t.closed:
-		return false
-	}
-}
-
-func (t *Tunnel) Read() (Payload, error) {
-	var payload Payload
-	var linkid, sz uint16
+// can't read concurrently
+func (tun *Tunnel) Read() (linkid uint16, data []byte, err error) {
+	var h header
 
 	// disable timeout when read packet head
-	t.conn.SetReadDeadline(time.Time{})
-	if err := binary.Read(t.reader, binary.LittleEndian, &linkid); err != nil {
-		return payload, err
+	tun.SetReadDeadline(time.Time{})
+	if err = binary.Read(tun.Conn, binary.LittleEndian, &h); err != nil {
+		return
 	}
 
-	if err := binary.Read(t.reader, binary.LittleEndian, &sz); err != nil {
-		return payload, err
-	}
-
-	data := mpool.Get()[0:sz]
-	// timeout if can't read a packet in 10 seconds
+	data = mpool.Get()[0:h.Len]
+	// timeout if can't read a packet in time
 	if Timeout > 0 {
-		t.conn.SetReadDeadline(time.Now().Add(time.Duration(Timeout) * time.Second))
+		tun.SetReadDeadline(time.Now().Add(time.Duration(Timeout) * time.Second))
 	}
-	if _, err := io.ReadFull(t.reader, data); err != nil {
-		return payload, err
+	if _, err = io.ReadFull(tun.Conn, data); err != nil {
+		return
 	}
-	payload.linkid = linkid
-	payload.data = data
-	return payload, nil
+	linkid = h.Linkid
+	return
 }
 
-func (self *Tunnel) String() string {
-	return self.desc
+func (tun *Tunnel) String() string {
+	return fmt.Sprintf("tunnel[%s -> %s]", tun.Conn.LocalAddr(), tun.Conn.RemoteAddr())
 }
 
-func newTunnel(conn *net.TCPConn, rc4key []byte) *Tunnel {
-	desc := fmt.Sprintf("tunnel[%s <-> %s]", conn.LocalAddr(), conn.RemoteAddr())
-	bufsize := int(PacketSize) * 2
-	tunnel := &Tunnel{
-		writer: bufio.NewWriterSize(NewRC4Writer(conn, rc4key), bufsize),
-		reader: bufio.NewReaderSize(NewRC4Reader(conn, rc4key), bufsize),
-		wch:    make(chan Payload),
-		closed: make(chan struct{}),
-		conn:   conn,
-		desc:   desc,
-	}
-
-	go tunnel.pump()
-	return tunnel
+func newTunnel(conn net.Conn, key []byte) *Tunnel {
+	var tun Tunnel
+	tun.Conn = &Conn{conn, nil, nil}
+	tun.Conn.SetCipherKey(key)
+	return &tun
 }

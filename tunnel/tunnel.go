@@ -16,6 +16,7 @@ import (
 )
 
 var Timeout int64 // tunnel read/write timeout
+var errTooLarge = fmt.Errorf("tunnel.Read: packet too large")
 
 type header struct {
 	Linkid uint16
@@ -55,6 +56,11 @@ func (tun *Tunnel) Read() (linkid uint16, data []byte, err error) {
 	// disable timeout when read packet head
 	tun.SetReadDeadline(time.Time{})
 	if err = binary.Read(tun.Conn, binary.LittleEndian, &h); err != nil {
+		return
+	}
+
+	if h.Len > PacketSize {
+		err = errTooLarge
 		return
 	}
 

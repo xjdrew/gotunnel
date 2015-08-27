@@ -6,6 +6,7 @@
 package tunnel
 
 import (
+	"bufio"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -36,7 +37,12 @@ func (tun *Tunnel) Write(linkid uint16, data []byte) (err error) {
 	if err = binary.Write(tun.Conn, binary.LittleEndian, header{linkid, uint16(len(data))}); err != nil {
 		return err
 	}
+
 	if _, err = tun.Conn.Write(data); err != nil {
+		return err
+	}
+
+	if err = tun.Conn.Flush(); err != nil {
 		return err
 	}
 	return
@@ -70,7 +76,7 @@ func (tun *Tunnel) String() string {
 
 func newTunnel(conn net.Conn, key []byte) *Tunnel {
 	var tun Tunnel
-	tun.Conn = &Conn{conn, nil, nil}
+	tun.Conn = &Conn{conn, bufio.NewReaderSize(conn, 64*1024), bufio.NewWriterSize(conn, 64*1024), nil, nil}
 	tun.Conn.SetCipherKey(key)
 	return &tun
 }

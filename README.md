@@ -28,7 +28,7 @@ usage: bin/gotunnel
   -log=1: log level
   -secret="the answer to life, the universe and everything": tunnel secret
   -timeout=10: tunnel read/write timeout
-  -tunnels=1: low level tunnel count, 0 if work as server
+  -tunnels=0: low level tunnel count, 0 if work as server
 ```
 
 some options:
@@ -46,11 +46,11 @@ and use it on your pc:
 ```
 curl --proxy server:8080 http://example.com
 ```
-It works fine but all traffic between your server and pc is plaintext, so someone can moitor you easily. In this case, gotunnel could help to encrypt your traffic.
+It works fine but all traffic between your server and pc is plaintext, so someone can monitor you easily. In this case, gotunnel could help to encrypt your traffic.
 
 First, on your server, resart squid to listen on a local port, for example **127.0.0.1:3128**. Then start gotunnel server listen on 8080 and use **127.0.0.1:3128** as backend.
 ```
-$ ./gotunnel -tunnels=0 -listen=:8001 -backend=127.0.0.1:3128 secret="your secret" -log=10 
+$ ./gotunnel -listen=:8001 -backend=127.0.0.1:3128 secret="your secret" -log=10 
 ```
 Second, on your pc, start gotunnel client:
 ```

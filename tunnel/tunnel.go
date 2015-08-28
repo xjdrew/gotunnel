@@ -15,9 +15,13 @@ import (
 	"time"
 )
 
-var Timeout int64 // tunnel read/write timeout
+// tunnel read/write timeout
+var Timeout int64
 var errTooLarge = fmt.Errorf("tunnel.Read: packet too large")
 
+// tunnel packet header
+// a tunnel packet consists of a header and a body
+// Len is the length of subsequent packet body
 type header struct {
 	Linkid uint16
 	Len    uint16

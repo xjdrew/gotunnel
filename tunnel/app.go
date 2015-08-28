@@ -60,5 +60,5 @@ func (app *App) Wait() {
 
 func (app *App) Status() {
 	app.service.Status()
-	LogStack("<status> num goroutine: %d, pool %d/%d/%d", runtime.NumGoroutine(), mpool.Used(), mpool.Freed(), mpool.Alloced())
+	LogStack("<status> num goroutine: %d", runtime.NumGoroutine())
 }

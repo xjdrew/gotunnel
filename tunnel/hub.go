@@ -8,6 +8,7 @@ package tunnel
 import (
 	"bytes"
 	"encoding/binary"
+	"sync"
 )
 
 const (
@@ -23,22 +24,15 @@ type Cmd struct {
 	Linkid uint16
 }
 
-type CtrlDelegate interface {
-	Ctrl(cmd *Cmd) bool
-}
-
 type Hub struct {
-	*LinkSet
-	tunnel *Tunnel
+	tunnel   *Tunnel
+	links    map[uint16]*Link
+	linkLock sync.RWMutex
 
-	delegate CtrlDelegate
+	onCtrlFilter func(cmd Cmd) bool
 }
 
-func (self *Hub) SetCtrlDelegate(delegate CtrlDelegate) {
-	self.delegate = delegate
-}
-
-func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
+func (hub *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
 	switch cmd {
 	case LINK_DATA:
 		Info("link(%d) send %d bytes data", linkid, len(data))
@@ -54,20 +48,20 @@ func (self *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
 		Info("link(%d) send cmd:%d", linkid, cmd)
 	}
 
-	if err := self.tunnel.Write(linkid, data); err != nil {
-		Error("link(%d) write to %s failed:%s", linkid, self.tunnel, err.Error())
+	if err := hub.tunnel.Write(linkid, data); err != nil {
+		Error("link(%d) write to %s failed:%s", linkid, hub.tunnel, err.Error())
 		return false
 	}
 	return true
 }
 
-func (self *Hub) onCtrl(cmd *Cmd) {
-	if self.delegate != nil && self.delegate.Ctrl(cmd) {
+func (hub *Hub) onCtrl(cmd Cmd) {
+	if hub.onCtrlFilter != nil && hub.onCtrlFilter(cmd) {
 		return
 	}
 
 	linkid := cmd.Linkid
-	link := self.getLink(linkid)
+	link := hub.getLink(linkid)
 	if link == nil {
 		Error("link(%d) recv cmd:%d, no link", linkid, cmd.Cmd)
 		return
@@ -85,8 +79,8 @@ func (self *Hub) onCtrl(cmd *Cmd) {
 	}
 }
 
-func (self *Hub) onData(linkid uint16, data []byte) {
-	link := self.getLink(linkid)
+func (hub *Hub) onData(linkid uint16, data []byte) {
+	link := hub.getLink(linkid)
 
 	if link == nil {
 		mpool.Put(data)
@@ -102,18 +96,18 @@ func (self *Hub) onData(linkid uint16, data []byte) {
 	return
 }
 
-func (self *Hub) dispatch() {
-	defer self.tunnel.Close()
+func (hub *Hub) Start() {
+	defer hub.tunnel.Close()
 
-	var cmd Cmd
 	for {
-		linkid, data, err := self.tunnel.Read()
+		linkid, data, err := hub.tunnel.Read()
 		if err != nil {
-			Error("%s read failed:%v", self.tunnel, err)
+			Error("%s read failed:%v", hub.tunnel, err)
 			break
 		}
 
 		if linkid == 0 {
+			var cmd Cmd
 			buf := bytes.NewBuffer(data)
 			err := binary.Read(buf, binary.LittleEndian, &cmd)
 			mpool.Put(data)
@@ -122,61 +116,63 @@ func (self *Hub) dispatch() {
 				break
 			}
 			Info("link(%d) recv cmd:%d", cmd.Linkid, cmd.Cmd)
-			self.onCtrl(&cmd)
+			hub.onCtrl(cmd)
 		} else {
 			Info("link(%d) recv %d bytes data", linkid, len(data))
-			self.onData(linkid, data)
+			hub.onData(linkid, data)
 		}
 	}
-}
-
-func (self *Hub) Start() {
-	self.dispatch()
 
 	// tunnel disconnect, so reset all link
 	Error("reset all link")
-	for i := uint16(1); i < MaxLinkPerTunnel; i++ {
-		link := self.getLink(i)
-		if link != nil {
-			link.resetRSflag()
-			Error("link(%d) reset", i)
-		}
-	}
-	Log("hub(%s) quit", self.tunnel)
+	hub.resetAllLink()
+	Log("hub(%s) quit", hub.tunnel)
 }
 
-func (self *Hub) Status() {
-	total := 0
-	links := make([]uint16, 100)
-	for i := uint16(0); i < MaxLinkPerTunnel; i++ {
-		if self.links[i] != nil {
-			if total < cap(links) {
-				links[total] = i
-			}
-			total += 1
-		}
+func (hub *Hub) Status() {
+	hub.linkLock.RLock()
+	defer hub.linkLock.RUnlock()
+	var links []uint16
+	for linkid := range hub.links {
+		links = append(links, linkid)
 	}
-	if total <= cap(links) {
-		links = links[:total]
-	}
-	Log("<status> %s, %d links(%v)", self.tunnel, total, links)
+	Log("<status> %s, %d links(%v)", hub.tunnel, len(hub.links), links)
 }
 
-func (self *Hub) NewLink(linkid uint16) *Link {
-	link := newLink(linkid, self)
-	if self.setLink(linkid, link) {
-		return link
+func (hub *Hub) resetAllLink() {
+	hub.linkLock.RLock()
+	defer hub.linkLock.RUnlock()
+
+	for _, link := range hub.links {
+		link.resetRSflag()
 	}
-	return nil
 }
 
-func (self *Hub) ReleaseLink(linkid uint16) bool {
-	return self.resetLink(linkid)
+func (hub *Hub) getLink(linkid uint16) *Link {
+	hub.linkLock.RLock()
+	defer hub.linkLock.RUnlock()
+	return hub.links[linkid]
 }
 
-func newHub(tunnel *Tunnel, client bool) *Hub {
-	hub := new(Hub)
-	hub.LinkSet = newLinkSet(client)
-	hub.tunnel = tunnel
-	return hub
+func (hub *Hub) deleteLink(linkid uint16) {
+	hub.linkLock.Lock()
+	defer hub.linkLock.Unlock()
+	delete(hub.links, linkid)
+}
+
+func (hub *Hub) setLink(linkid uint16, link *Link) bool {
+	hub.linkLock.Lock()
+	defer hub.linkLock.Unlock()
+	if _, ok := hub.links[linkid]; ok {
+		return false
+	}
+	hub.links[linkid] = link
+	return true
+}
+
+func newHub(tunnel *Tunnel) *Hub {
+	return &Hub{
+		tunnel: tunnel,
+		links:  make(map[uint16]*Link),
+	}
 }

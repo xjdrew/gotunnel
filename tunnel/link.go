@@ -8,14 +8,16 @@ package tunnel
 import (
 	"bufio"
 	"errors"
+	"net"
 	"sync"
+	"time"
 )
 
 var errPeerClosed = errors.New("errPeerClosed")
 
 type Link struct {
 	id    uint16
-	conn  BiConn
+	conn  *net.TCPConn
 	hub   *Hub
 	rbuf  *LinkBuffer // 接收缓存
 	sflag bool        // 对端是否可以收数据
@@ -23,12 +25,12 @@ type Link struct {
 }
 
 // stop write data to remote
-func (self *Link) resetSflag() bool {
-	if self.sflag {
-		self.sflag = false
+func (link *Link) resetSflag() bool {
+	if link.sflag {
+		link.sflag = false
 		// close read
-		if self.conn != nil {
-			self.conn.CloseRead()
+		if link.conn != nil {
+			link.conn.CloseRead()
 		}
 		return true
 	}
@@ -36,104 +38,112 @@ func (self *Link) resetSflag() bool {
 }
 
 // stop recv data from remote
-func (self *Link) resetRflag() bool {
-	return self.rbuf.Close()
+func (link *Link) resetRflag() bool {
+	return link.rbuf.Close()
 }
 
 // peer link closed
-func (self *Link) resetRSflag() bool {
-	ok1 := self.resetSflag()
-	ok2 := self.resetRflag()
+func (link *Link) resetRSflag() bool {
+	ok1 := link.resetSflag()
+	ok2 := link.resetRflag()
 	return ok1 || ok2
 }
 
-func (self *Link) SendCreate() {
-	self.hub.Send(LINK_CREATE, self.id, nil)
+func (link *Link) SendCreate() {
+	link.hub.Send(LINK_CREATE, link.id, nil)
 }
 
-func (self *Link) SendClose() {
-	if self.resetRSflag() {
-		self.hub.Send(LINK_CLOSE, self.id, nil)
+func (link *Link) SendClose() {
+	if link.resetRSflag() {
+		link.hub.Send(LINK_CLOSE, link.id, nil)
 	}
 }
 
-func (self *Link) putData(data []byte) bool {
-	return self.rbuf.Put(data)
+func (link *Link) putData(data []byte) bool {
+	return link.rbuf.Put(data)
 }
 
 // read from link
-func (self *Link) pumpIn() {
-	defer self.wg.Done()
-	defer self.conn.CloseRead()
+func (link *Link) pumpIn() {
+	defer link.wg.Done()
+	defer link.conn.CloseRead()
 
 	bufsize := PacketSize * 2
-	rd := bufio.NewReaderSize(self.conn, bufsize)
+	rd := bufio.NewReaderSize(link.conn, bufsize)
 	for {
 		buffer := mpool.Get()
 		n, err := rd.Read(buffer)
 		if err != nil {
-			if self.resetSflag() {
-				self.hub.Send(LINK_CLOSE_SEND, self.id, nil)
+			if link.resetSflag() {
+				link.hub.Send(LINK_CLOSE_SEND, link.id, nil)
 			}
 			mpool.Put(buffer)
-			Debug("link(%d) read failed:%v", self.id, err)
+			Debug("link(%d) read failed:%v", link.id, err)
 			break
 		}
-		Trace("link(%d) read %d bytes:%s", self.id, n, string(buffer[:n]))
+		Trace("link(%d) read %d bytes:%s", link.id, n, string(buffer[:n]))
 
-		if !self.sflag {
+		if !link.sflag {
 			// receive LINK_CLOSE_WRITE
 			mpool.Put(buffer)
 			break
 		}
-		if !self.hub.Send(LINK_DATA, self.id, buffer[:n]) {
+		if !link.hub.Send(LINK_DATA, link.id, buffer[:n]) {
 			break
 		}
 	}
 }
 
 // write to link
-func (self *Link) pumpOut() {
-	defer self.wg.Done()
-	defer self.conn.CloseWrite()
+func (link *Link) pumpOut() {
+	defer link.wg.Done()
+	defer link.conn.CloseWrite()
 
 	for {
-		data, ok := self.rbuf.Pop()
+		data, ok := link.rbuf.Pop()
 		if !ok {
 			break
 		}
 
-		_, err := self.conn.Write(data)
+		_, err := link.conn.Write(data)
 		mpool.Put(data)
 
 		if err != nil {
-			if self.resetRflag() {
-				self.hub.Send(LINK_CLOSE_RECV, self.id, nil)
+			if link.resetRflag() {
+				link.hub.Send(LINK_CLOSE_RECV, link.id, nil)
 			}
-			Debug("link(%d) write failed:%v", self.id, err)
+			Debug("link(%d) write failed:%v", link.id, err)
 			break
 		}
-		Trace("link(%d) write %d bytes:%s", self.id, len(data), string(data))
+		Trace("link(%d) write %d bytes:%s", link.id, len(data), string(data))
 	}
 }
 
-func (self *Link) Pump(conn BiConn) {
-	self.conn = conn
+func (link *Link) Pump(conn *net.TCPConn) {
+	conn.SetKeepAlive(true)
+	conn.SetKeepAlivePeriod(time.Second * 60)
+	link.conn = conn
 
-	self.wg.Add(1)
-	go self.pumpIn()
+	link.wg.Add(1)
+	go link.pumpIn()
 
-	self.wg.Add(1)
-	go self.pumpOut()
+	link.wg.Add(1)
+	go link.pumpOut()
 
-	self.wg.Wait()
-	Info("link(%d) closed", self.id)
+	link.wg.Wait()
+	Info("link(%d) closed", link.id)
+	link.hub.deleteLink(link.id)
 }
 
 func newLink(id uint16, hub *Hub) *Link {
-	return &Link{
+	link := &Link{
 		id:    id,
 		hub:   hub,
 		rbuf:  NewLinkBuffer(16),
-		sflag: true}
+		sflag: true,
+	}
+	if hub.setLink(id, link) {
+		return link
+	}
+	return nil
 }

@@ -13,7 +13,6 @@ import (
 )
 
 var logger *log.Logger
-var LogLevel uint = 1
 
 func init() {
 	//logger = log.New(io.Writer(os.Stderr), "", log.Ldate | log.Lmicroseconds | log.Lshortfile)

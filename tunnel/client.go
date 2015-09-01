@@ -15,10 +15,14 @@ import (
 )
 
 type Client struct {
-	app  *App
-	cq   HubQueue
-	lock sync.Mutex
-	wg   sync.WaitGroup
+	laddr   string
+	backend string
+	secret  string
+	tunnels uint
+
+	alloc *IdAllocator
+	cq    HubQueue
+	lock  sync.Mutex
 }
 
 const (
@@ -26,7 +30,7 @@ const (
 )
 
 func (cli *Client) createHub() (hub *HubItem, err error) {
-	c, err := net.DialTimeout("tcp", cli.app.Backend, dailTimeoutSeconds)
+	c, err := net.DialTimeout("tcp", cli.backend, dailTimeoutSeconds)
 	if err != nil {
 		return
 	}
@@ -44,7 +48,7 @@ func (cli *Client) createHub() (hub *HubItem, err error) {
 	}
 	Debug("challenge(%v), len %d, %v", conn.RemoteAddr(), len(challenge), challenge)
 
-	a := NewTaa(cli.app.Secret)
+	a := NewTaa(cli.secret)
 	token, ok := a.ExchangeCipherBlock(challenge)
 	if !ok {
 		err = errors.New("exchange chanllenge failed")
@@ -60,7 +64,7 @@ func (cli *Client) createHub() (hub *HubItem, err error) {
 
 	tunnel := newTunnel(conn, a.GetRc4key())
 	hub = &HubItem{
-		Hub: newHub(tunnel, true),
+		Hub: newHub(tunnel),
 	}
 	return
 }
@@ -97,36 +101,30 @@ func (cli *Client) dropHub(item *HubItem) {
 	cli.lock.Unlock()
 }
 
-func (cli *Client) handleConn(hub *HubItem, conn BiConn) {
+func (cli *Client) handleConn(hub *HubItem, conn *net.TCPConn) {
 	defer conn.Close()
 	defer Recover()
 	defer cli.dropHub(hub)
 
-	linkid := hub.AcquireId()
-	if linkid == 0 {
-		Error("alloc linkid failed, source: %v", conn.RemoteAddr())
-		return
-	}
-	defer hub.ReleaseId(linkid)
+	linkid := cli.alloc.Acquire()
+	defer cli.alloc.Release(linkid)
 
 	Info("link(%d) create link, source: %v", linkid, conn.RemoteAddr())
-	link := hub.NewLink(linkid)
-	defer hub.ReleaseLink(linkid)
+	link := newLink(linkid, hub.Hub)
 
 	link.SendCreate()
 	link.Pump(conn)
 }
 
 func (cli *Client) listen() {
-	defer cli.wg.Done()
-
-	ln, err := net.ListenTCP("tcp", cli.app.laddr)
+	ln, err := net.Listen("tcp", cli.laddr)
 	if err != nil {
 		Panic("listen failed:%v", err)
 	}
 
+	tcpListener := ln.(*net.TCPListener)
 	for {
-		conn, err := ln.AcceptTCP()
+		conn, err := tcpListener.AcceptTCP()
 		if err != nil {
 			Log("acceept failed:%s", err.Error())
 			if opErr, ok := err.(*net.OpError); ok {
@@ -173,25 +171,27 @@ func (cli *Client) Start() error {
 		}(i)
 	}
 
-	cli.wg.Add(1)
 	go cli.listen()
 	return nil
 }
 
-func (cli *Client) Wait() {
-	cli.wg.Wait()
-	Log("tunnel client quit")
-}
-
 func (cli *Client) Status() {
+	defer cli.lock.Unlock()
+	cli.lock.Lock()
 	for _, hub := range cli.cq {
 		hub.Status()
 	}
 }
 
-func newClient(app *App) *Client {
-	return &Client{
-		app: app,
-		cq:  make(HubQueue, app.Tunnels)[0:0],
+func NewClient(listen, backend, secret string, tunnels uint) (*Client, error) {
+	client := &Client{
+		laddr:   listen,
+		backend: backend,
+		secret:  secret,
+		tunnels: tunnels,
+
+		alloc: newAllocator(),
+		cq:    make(HubQueue, tunnels)[0:0],
 	}
+	return client, nil
 }

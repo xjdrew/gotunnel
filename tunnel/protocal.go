@@ -6,6 +6,16 @@
 package tunnel
 
 /*
+client send authenticator to server:
+type Authenticator struct {
+	Nonce    uint64 // radmon value
+	Checksum uint64 // checksum of Nonce and secret
+}
+
+If Checksum can be verified, server will response with a ticket as below:
+type Ticket struct {
+}
+
 // tunnel wire protocal
 type tunnelHeader struct {
 	Linkid uint16

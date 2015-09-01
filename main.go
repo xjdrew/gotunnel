@@ -10,23 +10,24 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"github.com/xjdrew/gotunnel/tunnel"
 )
 
-const SIG_STATUS = syscall.Signal(36)
-
-func handleSignal(app *tunnel.App) {
+func handleSignal(app tunnel.Service) {
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, SIG_STATUS, syscall.SIGTERM, syscall.SIGHUP)
+	signal.Notify(c, syscall.SIGHUP)
 
 	for sig := range c {
 		switch sig {
-		case SIG_STATUS:
+		case syscall.SIGHUP:
 			app.Status()
+			tunnel.Log("total goroutines:%d", runtime.NumGoroutine())
 		default:
-			tunnel.Log("catch signal:%v, ignore", sig)
+			tunnel.Log("catch signal:%v, exit", sig)
+			os.Exit(1)
 		}
 	}
 }
@@ -48,18 +49,22 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	app := &tunnel.App{
-		Listen:  *laddr,
-		Backend: *baddr,
-		Secret:  *secret,
-		Tunnels: *tunnels,
+	var app tunnel.Service
+	var err error
+	if *tunnels == 0 {
+		app, err = tunnel.NewServer(*laddr, *baddr, *secret)
+	} else {
+		app, err = tunnel.NewClient(*laddr, *baddr, *secret, *tunnels)
 	}
-	err := app.Start()
+
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "create service failed:%s\n", err.Error())
+		return
+	}
+
+	if err = app.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "start failed:%s\n", err.Error())
 		return
 	}
-	go handleSignal(app)
-
-	app.Wait()
+	handleSignal(app)
 }

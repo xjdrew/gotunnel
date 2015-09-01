@@ -15,7 +15,7 @@ to gain gotunnel's valuable features, such as secure and persistent.
 
 In your go workspace, run command as below:
 ```bash
-go get -u git@github.com:xjdrew/gotunnel.git
+go get -u github.com/xjdrew/gotunnel
 ```
 If you don't known how to create a golang workspace, please see [install.sh](https://github.com/xjdrew/gotunnel/blob/master/install.sh)
 

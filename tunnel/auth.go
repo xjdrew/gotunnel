@@ -19,9 +19,9 @@ import (
 )
 
 const (
-	TaaTokenSize     int32 = aes.BlockSize
-	TaaSignatureSize int32 = md5.Size
-	TaaBlockSize     int32 = TaaTokenSize + TaaSignatureSize
+	TaaTokenSize     int = aes.BlockSize
+	TaaSignatureSize int = md5.Size
+	TaaBlockSize     int = TaaTokenSize + TaaSignatureSize
 )
 
 type authToken struct {
@@ -110,6 +110,10 @@ func (a *Taa) CheckSignature(src []byte) bool {
 // exchange cipher block
 //
 func (a *Taa) ExchangeCipherBlock(src []byte) ([]byte, bool) {
+	if len(src) != TaaBlockSize {
+		return nil, false
+	}
+
 	if !a.CheckSignature(src) {
 		return nil, false
 	}
@@ -125,6 +129,10 @@ func (a *Taa) ExchangeCipherBlock(src []byte) ([]byte, bool) {
 
 // verify cipher block
 func (a *Taa) VerifyCipherBlock(src []byte) bool {
+	if len(src) != TaaBlockSize {
+		return false
+	}
+
 	if !a.CheckSignature(src) {
 		return false
 	}

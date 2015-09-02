@@ -111,13 +111,16 @@ func (tun *Tunnel) Read() (linkid uint16, data []byte, err error) {
 	return
 }
 
-func (tun *Tunnel) String() string {
+func (tun Tunnel) String() string {
 	return fmt.Sprintf("tunnel[%s -> %s]", tun.Conn.LocalAddr(), tun.Conn.RemoteAddr())
 }
 
-func newTunnel(conn net.Conn, key []byte) *Tunnel {
+func newTunnel(conn *net.TCPConn) *Tunnel {
+	conn.SetKeepAlive(true)
+	conn.SetKeepAlivePeriod(time.Second * 180)
+
 	var tun Tunnel
 	tun.Conn = &Conn{conn, bufio.NewReaderSize(conn, 64*1024), bufio.NewWriterSize(conn, 64*1024), nil, nil}
-	tun.Conn.SetCipherKey(key)
+	Info("new tunnel:%s", tun)
 	return &tun
 }

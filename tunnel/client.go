@@ -8,7 +8,6 @@ package tunnel
 import (
 	"container/heap"
 	"errors"
-	"io"
 	"net"
 	"sync"
 	"time"
@@ -30,39 +29,32 @@ const (
 )
 
 func (cli *Client) createHub() (hub *HubItem, err error) {
-	c, err := net.DialTimeout("tcp", cli.backend, dailTimeoutSeconds)
+	conn, err := net.DialTimeout("tcp", cli.backend, dailTimeoutSeconds)
 	if err != nil {
 		return
 	}
 
-	conn := c.(*net.TCPConn)
-	conn.SetKeepAlive(true)
-	conn.SetKeepAlivePeriod(time.Second * 180)
-	Info("create tunnel: %v <-> %v", conn.LocalAddr(), conn.RemoteAddr())
-
-	// auth
-	challenge := make([]byte, TaaBlockSize)
-	if _, err = io.ReadFull(conn, challenge); err != nil {
-		Error("read challenge failed(%v):%s", conn.RemoteAddr(), err)
+	tunnel := newTunnel(conn.(*net.TCPConn))
+	_, challenge, err := tunnel.Read()
+	if err != nil {
+		Error("read challenge failed(%v):%s", tunnel, err)
 		return
 	}
-	Debug("challenge(%v), len %d, %v", conn.RemoteAddr(), len(challenge), challenge)
 
 	a := NewTaa(cli.secret)
 	token, ok := a.ExchangeCipherBlock(challenge)
 	if !ok {
 		err = errors.New("exchange chanllenge failed")
-		Error("exchange challenge failed(%v)", conn.RemoteAddr())
+		Error("exchange challenge failed(%v)", tunnel)
 		return
 	}
 
-	Debug("token(%v), len %d, %v", conn.RemoteAddr(), len(token), token)
-	if _, err = conn.Write(token); err != nil {
-		Error("write token failed(%v):%s", conn.RemoteAddr(), err)
+	if err = tunnel.Write(0, token); err != nil {
+		Error("write token failed(%v):%s", tunnel, err)
 		return
 	}
 
-	tunnel := newTunnel(conn, a.GetRc4key())
+	tunnel.SetCipherKey(a.GetRc4key())
 	hub = &HubItem{
 		Hub: newHub(tunnel),
 	}

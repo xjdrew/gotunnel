@@ -24,17 +24,13 @@ type Client struct {
 	lock  sync.Mutex
 }
 
-const (
-	dailTimeoutSeconds = 5 * time.Second
-)
-
 func (cli *Client) createHub() (hub *HubItem, err error) {
-	conn, err := net.DialTimeout("tcp", cli.backend, dailTimeoutSeconds)
+	conn, err := dial(cli.backend)
 	if err != nil {
 		return
 	}
 
-	tunnel := newTunnel(conn.(*net.TCPConn))
+	tunnel := newTunnel(conn)
 	_, challenge, err := tunnel.Read()
 	if err != nil {
 		Error("read challenge failed(%v):%s", tunnel, err)

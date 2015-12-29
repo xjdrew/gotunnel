@@ -18,7 +18,7 @@ import (
 
 var errTooLarge = fmt.Errorf("tunnel.Read: packet too large")
 
-type Conn struct {
+type TunnelConn struct {
 	net.Conn
 	reader *bufio.Reader
 	writer *bufio.Writer
@@ -26,12 +26,12 @@ type Conn struct {
 	dec    *rc4.Cipher
 }
 
-func (conn *Conn) SetCipherKey(key []byte) {
+func (conn *TunnelConn) SetCipherKey(key []byte) {
 	conn.enc, _ = rc4.NewCipher(key)
 	conn.dec, _ = rc4.NewCipher(key)
 }
 
-func (conn *Conn) Read(b []byte) (int, error) {
+func (conn *TunnelConn) Read(b []byte) (int, error) {
 	n, err := conn.reader.Read(b)
 	if n > 0 && conn.dec != nil {
 		conn.dec.XORKeyStream(b[:n], b[:n])
@@ -39,14 +39,14 @@ func (conn *Conn) Read(b []byte) (int, error) {
 	return n, err
 }
 
-func (conn *Conn) Write(b []byte) (int, error) {
+func (conn *TunnelConn) Write(b []byte) (int, error) {
 	if conn.enc != nil {
 		conn.enc.XORKeyStream(b, b)
 	}
 	return conn.writer.Write(b)
 }
 
-func (conn *Conn) Flush() error {
+func (conn *TunnelConn) Flush() error {
 	return conn.writer.Flush()
 }
 
@@ -59,7 +59,7 @@ type header struct {
 }
 
 type Tunnel struct {
-	*Conn
+	*TunnelConn
 	wlock sync.Mutex // protect concurrent write
 }
 
@@ -78,7 +78,7 @@ func (tun *Tunnel) Write(linkid uint16, data []byte) (err error) {
 		return err
 	}
 
-	if err = tun.Conn.Flush(); err != nil {
+	if err = tun.TunnelConn.Flush(); err != nil {
 		return err
 	}
 	return
@@ -94,7 +94,7 @@ func (tun *Tunnel) Read() (linkid uint16, data []byte, err error) {
 		return
 	}
 
-	if h.Len > PacketSize {
+	if h.Len > TunnelPacketSize {
 		err = errTooLarge
 		return
 	}
@@ -115,12 +115,8 @@ func (tun Tunnel) String() string {
 	return fmt.Sprintf("tunnel[%s -> %s]", tun.Conn.LocalAddr(), tun.Conn.RemoteAddr())
 }
 
-func newTunnel(conn *net.TCPConn) *Tunnel {
-	conn.SetKeepAlive(true)
-	conn.SetKeepAlivePeriod(time.Second * 180)
-
+func newTunnel(conn net.Conn) *Tunnel {
 	var tun Tunnel
-	tun.Conn = &Conn{conn, bufio.NewReaderSize(conn, 64*1024), bufio.NewWriterSize(conn, 64*1024), nil, nil}
-	Info("new tunnel:%s", tun)
+	tun.TunnelConn = &TunnelConn{conn, bufio.NewReaderSize(conn, TunnelPacketSize*2), bufio.NewWriterSize(conn, TunnelPacketSize*2), nil, nil}
 	return &tun
 }

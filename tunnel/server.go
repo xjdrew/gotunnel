@@ -10,13 +10,12 @@ import (
 )
 
 type Server struct {
-	laddr *net.TCPAddr
-	baddr *net.TCPAddr
-
+	ln     net.Listener
+	baddr  *net.TCPAddr
 	secret string
 }
 
-func (server *Server) handleConn(conn *net.TCPConn) {
+func (server *Server) handleConn(conn net.Conn) {
 	defer conn.Close()
 	defer Recover()
 
@@ -48,23 +47,13 @@ func (server *Server) handleConn(conn *net.TCPConn) {
 }
 
 func (server *Server) listen() {
-	ln, err := net.ListenTCP("tcp", server.laddr)
-	if err != nil {
-		Panic("listen failed:%v", err)
-	}
-
 	for {
-		conn, err := ln.AcceptTCP()
+		conn, err := server.ln.Accept()
 		if err != nil {
-			Error("back server acceept failed:%s", err.Error())
-			if opErr, ok := err.(*net.OpError); ok {
-				if !opErr.Temporary() {
-					break
-				}
-			}
-			continue
+			Error("acceept failed:%s", err.Error())
+			break
 		}
-		Debug("back server, new connection from %v", conn.RemoteAddr())
+		Debug("new connection from %v", conn.RemoteAddr())
 		go server.handleConn(conn)
 	}
 }
@@ -78,7 +67,7 @@ func (server *Server) Status() {
 }
 
 func NewServer(listen, backend, secret string) (*Server, error) {
-	laddr, err := net.ResolveTCPAddr("tcp", listen)
+	ln, err := newListener(listen)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +78,7 @@ func NewServer(listen, backend, secret string) (*Server, error) {
 	}
 
 	server := &Server{
-		laddr:  laddr,
+		ln:     ln,
 		baddr:  baddr,
 		secret: secret,
 	}

@@ -16,7 +16,12 @@ import (
 	"github.com/xjdrew/gotunnel/tunnel"
 )
 
-func handleSignal(app tunnel.Service) {
+type Service interface {
+	Start() error
+	Status()
+}
+
+func handleSignal(app Service) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP)
 
@@ -45,11 +50,12 @@ func main() {
 	tunnels := flag.Uint("tunnels", 0, "low level tunnel count, 0 if work as server")
 	flag.Int64Var(&tunnel.Timeout, "timeout", 3, "tunnel read/write timeout")
 	flag.UintVar(&tunnel.LogLevel, "log", 1, "log level")
+	flag.BoolVar(&tunnel.Udt, "udt", false, "udt tunnel")
 
 	flag.Usage = usage
 	flag.Parse()
 
-	var app tunnel.Service
+	var app Service
 	var err error
 	if *tunnels == 0 {
 		app, err = tunnel.NewServer(*laddr, *baddr, *secret)

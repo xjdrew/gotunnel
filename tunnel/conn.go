@@ -89,7 +89,9 @@ func (tun *Tunnel) Read() (linkid uint16, data []byte, err error) {
 	var h header
 
 	// disable timeout when read packet head
-	tun.SetReadDeadline(time.Time{})
+	if Timeout > 0 {
+		tun.SetReadDeadline(time.Time{})
+	}
 	if err = binary.Read(tun.Conn, binary.LittleEndian, &h); err != nil {
 		return
 	}

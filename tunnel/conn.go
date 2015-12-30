@@ -70,11 +70,11 @@ func (tun *Tunnel) Write(linkid uint16, data []byte) (err error) {
 	tun.wlock.Lock()
 	defer tun.wlock.Unlock()
 
-	if err = binary.Write(tun.Conn, binary.LittleEndian, header{linkid, uint16(len(data))}); err != nil {
+	if err = binary.Write(tun.TunnelConn, binary.LittleEndian, header{linkid, uint16(len(data))}); err != nil {
 		return err
 	}
 
-	if _, err = tun.Conn.Write(data); err != nil {
+	if _, err = tun.TunnelConn.Write(data); err != nil {
 		return err
 	}
 
@@ -92,7 +92,7 @@ func (tun *Tunnel) Read() (linkid uint16, data []byte, err error) {
 	if Timeout > 0 {
 		tun.SetReadDeadline(time.Time{})
 	}
-	if err = binary.Read(tun.Conn, binary.LittleEndian, &h); err != nil {
+	if err = binary.Read(tun.TunnelConn, binary.LittleEndian, &h); err != nil {
 		return
 	}
 
@@ -106,7 +106,7 @@ func (tun *Tunnel) Read() (linkid uint16, data []byte, err error) {
 	if Timeout > 0 {
 		tun.SetReadDeadline(time.Now().Add(time.Duration(Timeout) * time.Second))
 	}
-	if _, err = io.ReadFull(tun.Conn, data); err != nil {
+	if _, err = io.ReadFull(tun.TunnelConn, data); err != nil {
 		return
 	}
 	linkid = h.Linkid

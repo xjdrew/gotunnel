@@ -7,7 +7,7 @@ package tunnel
 
 // tunnel read/write timeout
 const (
-	PacketSize = 8192
+	PacketSize = 65536
 )
 
 var (

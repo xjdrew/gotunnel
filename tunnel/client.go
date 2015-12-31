@@ -25,7 +25,7 @@ type Client struct {
 }
 
 const (
-	dialTimeoutSeconds = 5 * time.Second
+	dialTimeoutSeconds = 3 * time.Second
 )
 
 func (cli *Client) createHub() (hub *HubItem, err error) {
@@ -135,7 +135,7 @@ func (cli *Client) listen() {
 		}
 
 		conn.SetKeepAlive(true)
-		conn.SetKeepAlivePeriod(time.Second * 60)
+		conn.SetKeepAlivePeriod(time.Second * 10)
 		go cli.handleConn(hub, conn)
 	}
 }

@@ -53,7 +53,7 @@ func (server *Server) listen() {
 			Error("acceept failed:%s", err.Error())
 			break
 		}
-		Debug("new connection from %v", conn.RemoteAddr())
+		Log("new connection from %v", conn.RemoteAddr())
 		go server.handleConn(conn)
 	}
 }

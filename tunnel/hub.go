@@ -127,7 +127,7 @@ func (h *Hub) Start() {
 	// tunnel disconnect, so reset all link
 	Error("reset all link")
 	h.resetAllLink()
-	Log("h(%s) quit", h.tunnel)
+	Log("hub(%s) quit", h.tunnel)
 }
 
 func (h *Hub) Status() {

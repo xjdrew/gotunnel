@@ -25,11 +25,11 @@ type Client struct {
 }
 
 const (
-	dailTimeoutSeconds = 5 * time.Second
+	dialTimeoutSeconds = 5 * time.Second
 )
 
 func (cli *Client) createHub() (hub *HubItem, err error) {
-	conn, err := net.DialTimeout("tcp", cli.backend, dailTimeoutSeconds)
+	conn, err := net.DialTimeout("tcp", cli.backend, dialTimeoutSeconds)
 	if err != nil {
 		return
 	}

@@ -31,7 +31,7 @@ func (cli *Client) createHub() (hub *HubItem, err error) {
 	}
 
 	tunnel := newTunnel(conn)
-	_, challenge, err := tunnel.Read()
+	_, challenge, err := tunnel.ReadPacket()
 	if err != nil {
 		Error("read challenge failed(%v):%s", tunnel, err)
 		return
@@ -45,7 +45,7 @@ func (cli *Client) createHub() (hub *HubItem, err error) {
 		return
 	}
 
-	if err = tunnel.Write(0, token); err != nil {
+	if err = tunnel.WritePacket(0, token); err != nil {
 		Error("write token failed(%v):%s", tunnel, err)
 		return
 	}
@@ -94,14 +94,15 @@ func (cli *Client) handleConn(hub *HubItem, conn *net.TCPConn) {
 	defer Recover()
 	defer cli.dropHub(hub)
 
-	linkid := cli.alloc.Acquire()
-	defer cli.alloc.Release(linkid)
+	id := cli.alloc.Acquire()
+	defer cli.alloc.Release(id)
 
-	Info("link(%d) create link, source: %v", linkid, conn.RemoteAddr())
-	link := newLink(linkid, hub.Hub)
+	h := hub.Hub
+	l := h.createLink(id)
+	defer h.deleteLink(id)
 
-	link.SendCreate()
-	link.Pump(conn)
+	h.Send(LINK_CREATE, id, nil)
+	h.startLink(l, conn)
 }
 
 func (cli *Client) listen() {

@@ -25,12 +25,12 @@ func (server *Server) handleConn(conn net.Conn) {
 	a.GenToken()
 
 	challenge := a.GenCipherBlock(nil)
-	if err := tunnel.Write(0, challenge); err != nil {
+	if err := tunnel.WritePacket(0, challenge); err != nil {
 		Error("write challenge failed(%v):%s", tunnel, err)
 		return
 	}
 
-	_, token, err := tunnel.Read()
+	_, token, err := tunnel.ReadPacket()
 	if err != nil {
 		Error("read token failed(%v):%s", tunnel, err)
 		return

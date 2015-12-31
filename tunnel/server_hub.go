@@ -14,31 +14,30 @@ type ServerHub struct {
 	baddr *net.TCPAddr
 }
 
-func (hub *ServerHub) handleLink(link *Link) {
+func (h *ServerHub) handleLink(l *link) {
 	defer Recover()
+	defer h.deleteLink(l.id)
 
-	conn, err := net.DialTCP("tcp", nil, hub.baddr)
+	conn, err := net.DialTCP("tcp", nil, h.baddr)
 	if err != nil {
-		Error("link(%d) connect to backend failed, err:%v", link.id, err)
-		link.SendClose()
+		Error("link(%d) connect to backend failed, err:%v", l.id, err)
+		h.Send(LINK_CLOSE, l.id, nil)
+		h.deleteLink(l.id)
 		return
 	}
 
-	Info("link(%d) new connection to %v", link.id, conn.RemoteAddr())
-	link.Pump(conn)
+	h.startLink(l, conn)
 }
 
-func (hub *ServerHub) onCtrl(cmd Cmd) bool {
-	linkid := cmd.Linkid
+func (h *ServerHub) onCtrl(cmd Cmd) bool {
+	id := cmd.Id
 	switch cmd.Cmd {
 	case LINK_CREATE:
-		link := newLink(linkid, hub.Hub)
-		if link != nil {
-			Info("link(%d) new link", linkid)
-			go hub.handleLink(link)
+		l := h.createLink(id)
+		if l != nil {
+			go h.handleLink(l)
 		} else {
-			Error("link(%d) id conflict")
-			hub.Send(LINK_CLOSE, linkid, nil)
+			h.Send(LINK_CLOSE, id, nil)
 		}
 		return true
 	}
@@ -46,10 +45,10 @@ func (hub *ServerHub) onCtrl(cmd Cmd) bool {
 }
 
 func newServerHub(tunnel *Tunnel, baddr *net.TCPAddr) *ServerHub {
-	hub := &ServerHub{
+	h := &ServerHub{
 		Hub:   newHub(tunnel),
 		baddr: baddr,
 	}
-	hub.Hub.onCtrlFilter = hub.onCtrl
-	return hub
+	h.Hub.onCtrlFilter = h.onCtrl
+	return h
 }

@@ -6,7 +6,6 @@
 package tunnel
 
 import (
-	"bufio"
 	"errors"
 	"net"
 	"sync"
@@ -15,134 +14,158 @@ import (
 
 var errPeerClosed = errors.New("errPeerClosed")
 
-type Link struct {
-	id    uint16
-	conn  *net.TCPConn
-	hub   *Hub
-	rbuf  *LinkBuffer // 接收缓存
-	sflag bool        // 对端是否可以收数据
-	wg    sync.WaitGroup
+type link struct {
+	id   uint16
+	conn *net.TCPConn
+	wbuf *Buffer // write buffer
+
+	lock sync.Mutex // protects below fields
+	rerr error      // if read closed, error to give reads
 }
 
-// stop write data to remote
-func (link *Link) resetSflag() bool {
-	if link.sflag {
-		link.sflag = false
-		// close read
-		if link.conn != nil {
-			link.conn.CloseRead()
-		}
-		return true
+// stop read data from link
+func (l *link) rclose(err error) bool {
+	if err == nil {
+		err = errPeerClosed
 	}
-	return false
-}
 
-// stop recv data from remote
-func (link *Link) resetRflag() bool {
-	return link.rbuf.Close()
-}
+	l.lock.Lock()
+	defer l.lock.Unlock()
 
-// peer link closed
-func (link *Link) resetRSflag() bool {
-	ok1 := link.resetSflag()
-	ok2 := link.resetRflag()
-	return ok1 || ok2
-}
-
-func (link *Link) SendCreate() {
-	link.hub.Send(LINK_CREATE, link.id, nil)
-}
-
-func (link *Link) SendClose() {
-	if link.resetRSflag() {
-		link.hub.Send(LINK_CLOSE, link.id, nil)
+	if l.rerr != nil {
+		return false
 	}
-}
 
-func (link *Link) putData(data []byte) bool {
-	return link.rbuf.Put(data)
-}
-
-// read from link
-func (link *Link) pumpIn() {
-	defer link.wg.Done()
-	defer link.conn.CloseRead()
-
-	rd := bufio.NewReaderSize(link.conn, TunnelPacketSize*2)
-	for {
-		buffer := mpool.Get()
-		n, err := rd.Read(buffer)
-		if err != nil {
-			if link.resetSflag() {
-				link.hub.Send(LINK_CLOSE_SEND, link.id, nil)
-			}
-			mpool.Put(buffer)
-			Debug("link(%d) read failed:%v", link.id, err)
-			break
-		}
-		Trace("link(%d) read %d bytes:%s", link.id, n, string(buffer[:n]))
-
-		if !link.sflag {
-			// receive LINK_CLOSE_WRITE
-			mpool.Put(buffer)
-			break
-		}
-		if !link.hub.Send(LINK_DATA, link.id, buffer[:n]) {
-			break
-		}
+	l.rerr = err
+	if l.conn != nil {
+		l.conn.CloseRead()
 	}
+	return true
 }
 
-// write to link
-func (link *Link) pumpOut() {
-	defer link.wg.Done()
-	defer link.conn.CloseWrite()
+// stop write data into link
+func (l *link) wclose() bool {
+	return l.wbuf.Close()
+}
+
+// close link
+func (l *link) aclose() {
+	l.rclose(nil)
+	l.wclose()
+}
+
+// read data from link
+func (l *link) read() ([]byte, error) {
+	if l.rerr != nil {
+		return nil, l.rerr
+	}
+	b := mpool.Get()
+	n, err := l.conn.Read(b)
+	if err != nil {
+		l.rclose(err)
+		return nil, l.rerr
+	}
+	if l.rerr != nil {
+		return nil, l.rerr
+	}
+	return b[:n], nil
+}
+
+// write data into link
+func (l *link) write(b []byte) bool {
+	return l.wbuf.Put(b)
+}
+
+// inject data low level connection
+func (l *link) _write() error {
+	defer l.conn.CloseWrite()
 
 	for {
-		data, ok := link.rbuf.Pop()
+		data, ok := l.wbuf.Pop()
 		if !ok {
-			break
+			return errPeerClosed
 		}
 
-		_, err := link.conn.Write(data)
+		_, err := l.conn.Write(data)
 		mpool.Put(data)
-
 		if err != nil {
-			if link.resetRflag() {
-				link.hub.Send(LINK_CLOSE_RECV, link.id, nil)
-			}
-			Debug("link(%d) write failed:%v", link.id, err)
-			break
+			return err
 		}
-		Trace("link(%d) write %d bytes:%s", link.id, len(data), string(data))
 	}
 }
 
-func (link *Link) Pump(conn *net.TCPConn) {
+// set low level connection
+func (l *link) setConn(conn *net.TCPConn) {
+	if l.conn != nil {
+		Panic("link(%d) repeated set conn", l.id)
+	}
+	l.conn = conn
+}
+
+// hub function
+func (h *Hub) getLink(id uint16) *link {
+	h.ll.RLock()
+	defer h.ll.RUnlock()
+	return h.links[id]
+}
+
+func (h *Hub) deleteLink(id uint16) {
+	Info("link(%d) delete", id)
+	h.ll.Lock()
+	defer h.ll.Unlock()
+	delete(h.links, id)
+}
+
+func (h *Hub) createLink(id uint16) *link {
+	Info("link(%d) new link", id)
+	h.ll.Lock()
+	defer h.ll.Unlock()
+	if _, ok := h.links[id]; ok {
+		Error("link(%d) repeated", id)
+		return nil
+	}
+	l := &link{
+		id:   id,
+		wbuf: NewBuffer(16),
+	}
+	h.links[id] = l
+	return l
+}
+
+func (h *Hub) startLink(l *link, conn *net.TCPConn) {
 	conn.SetKeepAlive(true)
 	conn.SetKeepAlivePeriod(time.Second * 60)
-	link.conn = conn
+	l.setConn(conn)
 
-	link.wg.Add(1)
-	go link.pumpIn()
+	Info("link(%d) start: %v", l.id, conn.RemoteAddr())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			data, err := l.read()
+			if err != nil {
+				if err != errPeerClosed {
+					h.Send(LINK_CLOSE_SEND, l.id, nil)
+				}
+				break
+			}
 
-	link.wg.Add(1)
-	go link.pumpOut()
+			if !h.Send(LINK_DATA, l.id, data) {
+				l.rclose(nil)
+				break
+			}
+		}
+	}()
 
-	link.wg.Wait()
-	Info("link(%d) closed", link.id)
-	link.hub.deleteLink(link.id)
-}
-
-func newLink(id uint16, hub *Hub) *Link {
-	link := &Link{
-		id:    id,
-		hub:   hub,
-		rbuf:  NewLinkBuffer(16),
-		sflag: true,
-	}
-	if hub.setLink(id, link) {
-		return link
-	}
-	return nil
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := l._write()
+		if err != errPeerClosed {
+			h.Send(LINK_CLOSE_RECV, l.id, nil)
+		}
+	}()
+	wg.Wait()
+	Info("link(%d) close", l.id)
 }

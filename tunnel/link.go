@@ -68,7 +68,7 @@ func (link *Link) pumpIn() {
 	defer link.wg.Done()
 	defer link.conn.CloseRead()
 
-	bufsize := PacketSize * 2
+	bufsize := PacketSize * 8
 	rd := bufio.NewReaderSize(link.conn, bufsize)
 	for {
 		buffer := mpool.Get()
@@ -121,7 +121,7 @@ func (link *Link) pumpOut() {
 
 func (link *Link) Pump(conn *net.TCPConn) {
 	conn.SetKeepAlive(true)
-	conn.SetKeepAlivePeriod(time.Second * 60)
+	conn.SetKeepAlivePeriod(time.Second * 10)
 	link.conn = conn
 
 	link.wg.Add(1)
@@ -139,7 +139,7 @@ func newLink(id uint16, hub *Hub) *Link {
 	link := &Link{
 		id:    id,
 		hub:   hub,
-		rbuf:  NewLinkBuffer(16),
+		rbuf:  NewLinkBuffer(512),
 		sflag: true,
 	}
 	if hub.setLink(id, link) {

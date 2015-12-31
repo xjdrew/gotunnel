@@ -117,10 +117,10 @@ func (tun Tunnel) String() string {
 
 func newTunnel(conn *net.TCPConn) *Tunnel {
 	conn.SetKeepAlive(true)
-	conn.SetKeepAlivePeriod(time.Second * 180)
+	conn.SetKeepAlivePeriod(time.Second * 10) //we do not keep so long
 
 	var tun Tunnel
-	tun.Conn = &Conn{conn, bufio.NewReaderSize(conn, 64*1024), bufio.NewWriterSize(conn, 64*1024), nil, nil}
+	tun.Conn = &Conn{conn, bufio.NewReaderSize(conn, 512*1024), bufio.NewWriterSize(conn, 512*1024), nil, nil}
 	Info("new tunnel:%s", tun)
 	return &tun
 }

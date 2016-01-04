@@ -6,8 +6,8 @@
 package tunnel
 
 type HubItem struct {
-	*Hub
-	priority int // cocurrent link
+	*ClientHub
+	priority int // current link count
 	index    int // index in the heap
 }
 

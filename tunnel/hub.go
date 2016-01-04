@@ -17,6 +17,7 @@ const (
 	LINK_CLOSE
 	LINK_CLOSE_RECV
 	LINK_CLOSE_SEND
+	TUN_HEARTBEAT
 )
 
 type Cmd struct {
@@ -33,22 +34,18 @@ type Hub struct {
 	onCtrlFilter func(cmd Cmd) bool
 }
 
-func (h *Hub) Send(cmd uint8, id uint16, data []byte) bool {
-	switch cmd {
-	case LINK_DATA:
-		Info("link(%d) send %d bytes data", id, len(data))
-	default:
-		buf := bytes.NewBuffer(mpool.Get()[0:0])
-		var body Cmd
-		body.Cmd = cmd
-		body.Id = id
-		binary.Write(buf, binary.LittleEndian, &body)
-
-		Info("link(%d) send cmd:%d", id, cmd)
-		id = 0
-		data = buf.Bytes()
+func (h *Hub) SendCmd(id uint16, cmd uint8) bool {
+	buf := bytes.NewBuffer(mpool.Get()[0:0])
+	c := Cmd{
+		Cmd: cmd,
+		Id:  id,
 	}
+	binary.Write(buf, binary.LittleEndian, &c)
+	Info("link(%d) send cmd:%d", id, cmd)
+	return h.Send(0, buf.Bytes())
+}
 
+func (h *Hub) Send(id uint16, data []byte) bool {
 	if err := h.tunnel.WritePacket(id, data); err != nil {
 		Error("link(%d) write to %s failed:%s", id, h.tunnel, err.Error())
 		return false
@@ -72,7 +69,7 @@ func (h *Hub) onCtrl(cmd Cmd) {
 	case LINK_CLOSE:
 		l.aclose()
 	case LINK_CLOSE_RECV:
-		l.rclose(nil)
+		l.rclose()
 	case LINK_CLOSE_SEND:
 		l.wclose()
 	default:
@@ -128,6 +125,10 @@ func (h *Hub) Start() {
 	Error("reset all link")
 	h.resetAllLink()
 	Log("hub(%s) quit", h.tunnel)
+}
+
+func (h *Hub) Close() {
+	h.tunnel.Close()
 }
 
 func (h *Hub) Status() {

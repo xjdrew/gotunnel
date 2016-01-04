@@ -23,12 +23,8 @@ type link struct {
 	rerr error      // if read closed, error to give reads
 }
 
-// stop read data from link
-func (l *link) rclose(err error) bool {
-	if err == nil {
-		err = errPeerClosed
-	}
-
+// set rerr
+func (l *link) setRerr(err error) bool {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 
@@ -43,6 +39,11 @@ func (l *link) rclose(err error) bool {
 	return true
 }
 
+// stop read data from link
+func (l *link) rclose() bool {
+	return l.setRerr(errPeerClosed)
+}
+
 // stop write data into link
 func (l *link) wclose() bool {
 	return l.wbuf.Close()
@@ -50,7 +51,7 @@ func (l *link) wclose() bool {
 
 // close link
 func (l *link) aclose() {
-	l.rclose(nil)
+	l.rclose()
 	l.wclose()
 }
 
@@ -62,7 +63,7 @@ func (l *link) read() ([]byte, error) {
 	b := mpool.Get()
 	n, err := l.conn.Read(b)
 	if err != nil {
-		l.rclose(err)
+		l.setRerr(err)
 		return nil, l.rerr
 	}
 	if l.rerr != nil {
@@ -146,15 +147,12 @@ func (h *Hub) startLink(l *link, conn *net.TCPConn) {
 			data, err := l.read()
 			if err != nil {
 				if err != errPeerClosed {
-					h.Send(LINK_CLOSE_SEND, l.id, nil)
+					h.SendCmd(l.id, LINK_CLOSE_SEND)
 				}
 				break
 			}
 
-			if !h.Send(LINK_DATA, l.id, data) {
-				l.rclose(nil)
-				break
-			}
+			h.Send(l.id, data)
 		}
 	}()
 
@@ -163,7 +161,7 @@ func (h *Hub) startLink(l *link, conn *net.TCPConn) {
 		defer wg.Done()
 		err := l._write()
 		if err != errPeerClosed {
-			h.Send(LINK_CLOSE_RECV, l.id, nil)
+			h.SendCmd(l.id, LINK_CLOSE_RECV)
 		}
 	}()
 	wg.Wait()

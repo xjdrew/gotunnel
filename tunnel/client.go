@@ -13,6 +13,56 @@ import (
 	"time"
 )
 
+// client hub
+type ClientHub struct {
+	*Hub
+	sent uint16
+	rcvd uint16
+}
+
+func (h *ClientHub) heartbeat() {
+	c := time.Tick(1 * time.Second)
+
+	timeout := Timeout
+	if Timeout <= 0 {
+		timeout = TunnelMaxTimeout
+	}
+	for range c {
+		// id overflow
+		span := h.sent - h.rcvd
+		if int(span) >= timeout {
+			Error("tunnel(%v) timeout, sent:%d, rcvd:%d", h.Hub.tunnel, h.sent, h.rcvd)
+			h.Hub.Close()
+			break
+		}
+
+		h.sent = h.sent + 1
+		if !h.SendCmd(h.sent, TUN_HEARTBEAT) {
+			break
+		}
+	}
+}
+
+func (h *ClientHub) onCtrl(cmd Cmd) bool {
+	id := cmd.Id
+	switch cmd.Cmd {
+	case TUN_HEARTBEAT:
+		h.rcvd = id
+		return true
+	}
+	return false
+}
+
+func newClientHub(tunnel *Tunnel) *ClientHub {
+	h := &ClientHub{
+		Hub: newHub(tunnel),
+	}
+	h.Hub.onCtrlFilter = h.onCtrl
+	go h.heartbeat()
+	return h
+}
+
+// tunnel client
 type Client struct {
 	laddr   string
 	backend string
@@ -52,7 +102,7 @@ func (cli *Client) createHub() (hub *HubItem, err error) {
 
 	tunnel.SetCipherKey(a.GetRc4key())
 	hub = &HubItem{
-		Hub: newHub(tunnel),
+		ClientHub: newClientHub(tunnel),
 	}
 	return
 }
@@ -90,9 +140,9 @@ func (cli *Client) dropHub(item *HubItem) {
 }
 
 func (cli *Client) handleConn(hub *HubItem, conn *net.TCPConn) {
-	defer conn.Close()
 	defer Recover()
 	defer cli.dropHub(hub)
+	defer conn.Close()
 
 	id := cli.alloc.Acquire()
 	defer cli.alloc.Release(id)
@@ -101,7 +151,7 @@ func (cli *Client) handleConn(hub *HubItem, conn *net.TCPConn) {
 	l := h.createLink(id)
 	defer h.deleteLink(id)
 
-	h.Send(LINK_CREATE, id, nil)
+	h.SendCmd(id, LINK_CREATE)
 	h.startLink(l, conn)
 }
 
@@ -116,12 +166,7 @@ func (cli *Client) listen() {
 		conn, err := tcpListener.AcceptTCP()
 		if err != nil {
 			Log("acceept failed:%s", err.Error())
-			if opErr, ok := err.(*net.OpError); ok {
-				if !opErr.Temporary() {
-					break
-				}
-			}
-			continue
+			break
 		}
 		Info("new connection from %v", conn.RemoteAddr())
 		hub := cli.fetchHub()

@@ -16,12 +16,9 @@ type UdtListener struct {
 	net.Listener
 }
 
-func setUdtTimeout(conn net.Conn) {
-	if Timeout > 0 {
-		conn.SetWriteDeadline(time.Now().Add(time.Duration(Timeout) * time.Second))
-	} else {
-		conn.SetDeadline(time.Time{})
-	}
+func setUdtOpt(conn *udt.UDTConn) {
+	conn.SetDeadline(time.Time{})
+	conn.SetLinger(0)
 }
 
 func (l *UdtListener) Accept() (net.Conn, error) {
@@ -29,7 +26,7 @@ func (l *UdtListener) Accept() (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	setUdtTimeout(conn)
+	setUdtOpt(conn.(*udt.UDTConn))
 	return conn, err
 }
 
@@ -47,7 +44,7 @@ func newUdtListener(laddr string) (net.Listener, error) {
 func dialUdt(raddr string) (net.Conn, error) {
 	conn, err := udt.Dial("udt", raddr)
 	if err == nil {
-		setUdtTimeout(conn)
+		setUdtOpt(conn.(*udt.UDTConn))
 	}
 	return conn, err
 }

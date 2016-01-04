@@ -9,19 +9,68 @@ import (
 	"net"
 )
 
+// server hub
+type ServerHub struct {
+	*Hub
+	baddr *net.TCPAddr
+}
+
+func (h *ServerHub) handleLink(l *link) {
+	defer Recover()
+	defer h.deleteLink(l.id)
+
+	conn, err := net.DialTCP("tcp", nil, h.baddr)
+	if err != nil {
+		Error("link(%d) connect to backend failed, err:%v", l.id, err)
+		h.SendCmd(l.id, LINK_CLOSE)
+		h.deleteLink(l.id)
+		return
+	}
+
+	h.startLink(l, conn)
+}
+
+func (h *ServerHub) onCtrl(cmd Cmd) bool {
+	id := cmd.Id
+	switch cmd.Cmd {
+	case LINK_CREATE:
+		l := h.createLink(id)
+		if l != nil {
+			go h.handleLink(l)
+		} else {
+			h.SendCmd(id, LINK_CLOSE)
+		}
+		return true
+	case TUN_HEARTBEAT:
+		h.SendCmd(id, TUN_HEARTBEAT)
+		return true
+	}
+	return false
+}
+
+func newServerHub(tunnel *Tunnel, baddr *net.TCPAddr) *ServerHub {
+	h := &ServerHub{
+		Hub:   newHub(tunnel),
+		baddr: baddr,
+	}
+	h.Hub.onCtrlFilter = h.onCtrl
+	return h
+}
+
+// tunnel server
 type Server struct {
 	ln     net.Listener
 	baddr  *net.TCPAddr
 	secret string
 }
 
-func (server *Server) handleConn(conn net.Conn) {
+func (s *Server) handleConn(conn net.Conn) {
 	defer conn.Close()
 	defer Recover()
 
 	tunnel := newTunnel(conn)
 	// authenticate connection
-	a := NewTaa(server.secret)
+	a := NewTaa(s.secret)
 	a.GenToken()
 
 	challenge := a.GenCipherBlock(nil)
@@ -42,28 +91,28 @@ func (server *Server) handleConn(conn net.Conn) {
 	}
 
 	tunnel.SetCipherKey(a.GetRc4key())
-	hub := newServerHub(tunnel, server.baddr)
-	hub.Start()
+	h := newServerHub(tunnel, s.baddr)
+	h.Start()
 }
 
-func (server *Server) listen() {
+func (s *Server) listen() {
 	for {
-		conn, err := server.ln.Accept()
+		conn, err := s.ln.Accept()
 		if err != nil {
 			Error("acceept failed:%s", err.Error())
 			break
 		}
 		Log("new connection from %v", conn.RemoteAddr())
-		go server.handleConn(conn)
+		go s.handleConn(conn)
 	}
 }
 
-func (server *Server) Start() error {
-	go server.listen()
+func (s *Server) Start() error {
+	go s.listen()
 	return nil
 }
 
-func (server *Server) Status() {
+func (s *Server) Status() {
 }
 
 func NewServer(listen, backend, secret string) (*Server, error) {
@@ -77,10 +126,10 @@ func NewServer(listen, backend, secret string) (*Server, error) {
 		return nil, err
 	}
 
-	server := &Server{
+	s := &Server{
 		ln:     ln,
 		baddr:  baddr,
 		secret: secret,
 	}
-	return server, nil
+	return s, nil
 }

@@ -13,7 +13,6 @@ import (
 	"io"
 	"net"
 	"sync"
-	"time"
 )
 
 var errTooLarge = fmt.Errorf("tunnel.Read: packet too large")
@@ -60,7 +59,9 @@ type header struct {
 
 type Tunnel struct {
 	*TunnelConn
+
 	wlock sync.Mutex // protect concurrent write
+	werr  error      // write error
 }
 
 // can write concurrently
@@ -70,15 +71,25 @@ func (tun *Tunnel) WritePacket(linkid uint16, data []byte) (err error) {
 	tun.wlock.Lock()
 	defer tun.wlock.Unlock()
 
+	if tun.werr != nil {
+		return tun.werr
+	}
+
 	if err = binary.Write(tun, binary.LittleEndian, header{linkid, uint16(len(data))}); err != nil {
+		tun.werr = err
+		tun.Close()
 		return err
 	}
 
 	if _, err = tun.Write(data); err != nil {
+		tun.werr = err
+		tun.Close()
 		return err
 	}
 
 	if err = tun.Flush(); err != nil {
+		tun.werr = err
+		tun.Close()
 		return err
 	}
 	return
@@ -88,10 +99,6 @@ func (tun *Tunnel) WritePacket(linkid uint16, data []byte) (err error) {
 func (tun *Tunnel) ReadPacket() (linkid uint16, data []byte, err error) {
 	var h header
 
-	// disable timeout when read packet head
-	if Timeout > 0 {
-		tun.SetReadDeadline(time.Time{})
-	}
 	if err = binary.Read(tun, binary.LittleEndian, &h); err != nil {
 		return
 	}
@@ -102,10 +109,6 @@ func (tun *Tunnel) ReadPacket() (linkid uint16, data []byte, err error) {
 	}
 
 	data = mpool.Get()[0:h.Len]
-	// timeout if can't read a packet in time
-	if Timeout > 0 {
-		tun.SetReadDeadline(time.Now().Add(time.Duration(Timeout) * time.Second))
-	}
 	if _, err = io.ReadFull(tun, data); err != nil {
 		return
 	}

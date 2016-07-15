@@ -9,29 +9,77 @@ import (
 	"net"
 )
 
-type Server struct {
-	laddr *net.TCPAddr
+// server hub
+type ServerHub struct {
+	*Hub
 	baddr *net.TCPAddr
+}
 
+func (h *ServerHub) handleLink(l *link) {
+	defer Recover()
+	defer h.deleteLink(l.id)
+
+	conn, err := net.DialTCP("tcp", nil, h.baddr)
+	if err != nil {
+		Error("link(%d) connect to backend failed, err:%v", l.id, err)
+		h.SendCmd(l.id, LINK_CLOSE)
+		h.deleteLink(l.id)
+		return
+	}
+
+	h.startLink(l, conn)
+}
+
+func (h *ServerHub) onCtrl(cmd Cmd) bool {
+	id := cmd.Id
+	switch cmd.Cmd {
+	case LINK_CREATE:
+		l := h.createLink(id)
+		if l != nil {
+			go h.handleLink(l)
+		} else {
+			h.SendCmd(id, LINK_CLOSE)
+		}
+		return true
+	case TUN_HEARTBEAT:
+		h.SendCmd(id, TUN_HEARTBEAT)
+		return true
+	}
+	return false
+}
+
+func newServerHub(tunnel *Tunnel, baddr *net.TCPAddr) *ServerHub {
+	h := &ServerHub{
+		Hub:   newHub(tunnel),
+		baddr: baddr,
+	}
+	h.Hub.onCtrlFilter = h.onCtrl
+	return h
+}
+
+// tunnel server
+type Server struct {
+	ln     net.Listener
+	baddr  *net.TCPAddr
 	secret string
 }
 
-func (server *Server) handleConn(conn *net.TCPConn) {
+func (s *Server) handleConn(conn net.Conn) {
 	defer conn.Close()
 	defer Recover()
 
 	tunnel := newTunnel(conn)
 	// authenticate connection
-	a := NewTaa(server.secret)
+	a := NewTaa(s.secret)
 	a.GenToken()
 
 	challenge := a.GenCipherBlock(nil)
-	if err := tunnel.Write(0, challenge); err != nil {
+	if err := tunnel.WritePacket(0, challenge); err != nil {
 		Error("write challenge failed(%v):%s", tunnel, err)
 		return
 	}
 
-	_, token, err := tunnel.Read()
+	_, token, err := tunnel.ReadPacket()
 	if err != nil {
 		Error("read token failed(%v):%s", tunnel, err)
 		return
@@ -43,42 +91,33 @@ func (server *Server) handleConn(conn *net.TCPConn) {
 	}
 
 	tunnel.SetCipherKey(a.GetRc4key())
-	hub := newServerHub(tunnel, server.baddr)
-	hub.Start()
+	h := newServerHub(tunnel, s.baddr)
+	h.Start()
 }
 
-func (server *Server) listen() {
-	ln, err := net.ListenTCP("tcp", server.laddr)
-	if err != nil {
-		Panic("listen failed:%v", err)
-	}
-
+func (s *Server) Start() error {
+	defer s.ln.Close()
 	for {
-		conn, err := ln.AcceptTCP()
+		conn, err := s.ln.Accept()
 		if err != nil {
-			Error("back server acceept failed:%s", err.Error())
-			if opErr, ok := err.(*net.OpError); ok {
-				if !opErr.Temporary() {
-					break
-				}
+			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+				Log("acceept failed temporary: %s", netErr.Error())
+				continue
+			} else {
+				return err
 			}
-			continue
 		}
-		Debug("back server, new connection from %v", conn.RemoteAddr())
-		go server.handleConn(conn)
+		Log("new connection from %v", conn.RemoteAddr())
+		go s.handleConn(conn)
 	}
 }
 
-func (server *Server) Start() error {
-	go server.listen()
-	return nil
+func (s *Server) Status() {
 }
 
-func (server *Server) Status() {
-}
-
+// create a tunnel server
 func NewServer(listen, backend, secret string) (*Server, error) {
-	laddr, err := net.ResolveTCPAddr("tcp", listen)
+	ln, err := newListener(listen)
 	if err != nil {
 		return nil, err
 	}
@@ -88,10 +127,10 @@ func NewServer(listen, backend, secret string) (*Server, error) {
 		return nil, err
 	}
 
-	server := &Server{
-		laddr:  laddr,
+	s := &Server{
+		ln:     ln,
 		baddr:  baddr,
 		secret: secret,
 	}
-	return server, nil
+	return s, nil
 }

@@ -13,6 +13,56 @@ import (
 	"time"
 )
 
+// client hub
+type ClientHub struct {
+	*Hub
+	sent uint16
+	rcvd uint16
+}
+
+func (h *ClientHub) heartbeat() {
+	c := time.Tick(1 * time.Second)
+
+	timeout := Timeout
+	if Timeout <= 0 {
+		timeout = TunnelMaxTimeout
+	}
+	for range c {
+		// id overflow
+		span := h.sent - h.rcvd
+		if int(span) >= timeout {
+			Error("tunnel(%v) timeout, sent:%d, rcvd:%d", h.Hub.tunnel, h.sent, h.rcvd)
+			h.Hub.Close()
+			break
+		}
+
+		h.sent = h.sent + 1
+		if !h.SendCmd(h.sent, TUN_HEARTBEAT) {
+			break
+		}
+	}
+}
+
+func (h *ClientHub) onCtrl(cmd Cmd) bool {
+	id := cmd.Id
+	switch cmd.Cmd {
+	case TUN_HEARTBEAT:
+		h.rcvd = id
+		return true
+	}
+	return false
+}
+
+func newClientHub(tunnel *Tunnel) *ClientHub {
+	h := &ClientHub{
+		Hub: newHub(tunnel),
+	}
+	h.Hub.onCtrlFilter = h.onCtrl
+	go h.heartbeat()
+	return h
+}
+
+// tunnel client
 type Client struct {
 	laddr   string
 	backend string
@@ -24,18 +74,14 @@ type Client struct {
 	lock  sync.Mutex
 }
 
-const (
-	dailTimeoutSeconds = 5 * time.Second
-)
-
 func (cli *Client) createHub() (hub *HubItem, err error) {
-	conn, err := net.DialTimeout("tcp", cli.backend, dailTimeoutSeconds)
+	conn, err := dial(cli.backend)
 	if err != nil {
 		return
 	}
 
-	tunnel := newTunnel(conn.(*net.TCPConn))
-	_, challenge, err := tunnel.Read()
+	tunnel := newTunnel(conn)
+	_, challenge, err := tunnel.ReadPacket()
 	if err != nil {
 		Error("read challenge failed(%v):%s", tunnel, err)
 		return
@@ -49,14 +95,14 @@ func (cli *Client) createHub() (hub *HubItem, err error) {
 		return
 	}
 
-	if err = tunnel.Write(0, token); err != nil {
+	if err = tunnel.WritePacket(0, token); err != nil {
 		Error("write token failed(%v):%s", tunnel, err)
 		return
 	}
 
 	tunnel.SetCipherKey(a.GetRc4key())
 	hub = &HubItem{
-		Hub: newHub(tunnel),
+		ClientHub: newClientHub(tunnel),
 	}
 	return
 }
@@ -94,37 +140,39 @@ func (cli *Client) dropHub(item *HubItem) {
 }
 
 func (cli *Client) handleConn(hub *HubItem, conn *net.TCPConn) {
-	defer conn.Close()
 	defer Recover()
 	defer cli.dropHub(hub)
+	defer conn.Close()
 
-	linkid := cli.alloc.Acquire()
-	defer cli.alloc.Release(linkid)
+	id := cli.alloc.Acquire()
+	defer cli.alloc.Release(id)
 
-	Info("link(%d) create link, source: %v", linkid, conn.RemoteAddr())
-	link := newLink(linkid, hub.Hub)
+	h := hub.Hub
+	l := h.createLink(id)
+	defer h.deleteLink(id)
 
-	link.SendCreate()
-	link.Pump(conn)
+	h.SendCmd(id, LINK_CREATE)
+	h.startLink(l, conn)
 }
 
-func (cli *Client) listen() {
+func (cli *Client) listen() error {
 	ln, err := net.Listen("tcp", cli.laddr)
 	if err != nil {
-		Panic("listen failed:%v", err)
+		return err
 	}
+
+	defer ln.Close()
 
 	tcpListener := ln.(*net.TCPListener)
 	for {
 		conn, err := tcpListener.AcceptTCP()
 		if err != nil {
-			Log("acceept failed:%s", err.Error())
-			if opErr, ok := err.(*net.OpError); ok {
-				if !opErr.Temporary() {
-					break
-				}
+			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+				Log("acceept failed temporary: %s", netErr.Error())
+				continue
+			} else {
+				return err
 			}
-			continue
 		}
 		Info("new connection from %v", conn.RemoteAddr())
 		hub := cli.fetchHub()
@@ -163,8 +211,7 @@ func (cli *Client) Start() error {
 		}(i)
 	}
 
-	go cli.listen()
-	return nil
+	return cli.listen()
 }
 
 func (cli *Client) Status() {

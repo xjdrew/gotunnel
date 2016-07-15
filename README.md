@@ -1,6 +1,8 @@
 ## gotunnel
 gotunnel is a secure tcp tunnel software. It use persistent tcp connection(s) to comminicate bettwen client and server, so it's not a port forwarder.
 
+*now gotunnel support use udt protocal as low level tunnel, it can maximize your network bandwidth!*
+
 gotunnel could be added to any c/s system using tcp protocal. Make system structure evolve from
 ```
 client <--------------> server
@@ -23,12 +25,20 @@ If you don't known how to create a golang workspace, please see [install.sh](htt
 
 ```
 usage: bin/gotunnel
-  -backend="127.0.0.1:1234": backend address
-  -listen=":8001": listen address
-  -log=1: log level
-  -secret="the answer to life, the universe and everything": tunnel secret
-  -timeout=10: tunnel read/write timeout
-  -tunnels=0: low level tunnel count, 0 if work as server
+  -backend string
+        backend address (default "127.0.0.1:1234")
+  -listen string
+        listen address (default ":8001")
+  -log uint
+        log level (default 1)
+  -secret string
+        tunnel secret (default "the answer to life, the universe and everything")
+  -timeout int
+        tunnel read/write timeout (default 3)
+  -tunnels uint
+        low level tunnel count, 0 if work as server
+  -udt
+        udt tunnel
 ```
 
 some options:

@@ -108,7 +108,6 @@ func (a *Taa) CheckSignature(src []byte) bool {
 }
 
 // exchange cipher block
-//
 func (a *Taa) ExchangeCipherBlock(src []byte) ([]byte, bool) {
 	if len(src) != TaaBlockSize {
 		return nil, false

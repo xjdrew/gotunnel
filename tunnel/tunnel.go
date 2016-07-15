@@ -5,18 +5,20 @@
 
 package tunnel
 
-// tunnel read/write timeout
+import (
+	"time"
+)
+
 const (
-	PacketSize = 8192
+	TunnelMaxId           = ^uint16(0)
+	TunnelMaxTimeout      = 3600
+	TunnelPacketSize      = 8192
+	TunnelKeepAlivePeriod = time.Second * 180
 )
 
 var (
-	Timeout  int64 = 0
-	LogLevel uint  = 1
-	mpool          = NewMPool(PacketSize)
+	Timeout  int  = 0
+	LogLevel uint = 1
+	Udt      bool = false
+	mpool         = NewMPool(TunnelPacketSize)
 )
-
-type Service interface {
-	Start() error
-	Status()
-}

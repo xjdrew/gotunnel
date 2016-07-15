@@ -7,7 +7,7 @@ package tunnel
 
 import "sync"
 
-type LinkBuffer struct {
+type Buffer struct {
 	start  int
 	end    int
 	buf    [][]byte
@@ -15,17 +15,17 @@ type LinkBuffer struct {
 	closed bool
 }
 
-func (b *LinkBuffer) bufferLen() int {
+func (b *Buffer) bufferLen() int {
 	return (b.end + cap(b.buf) - b.start) % cap(b.buf)
 }
 
-func (b *LinkBuffer) Len() int {
+func (b *Buffer) Len() int {
 	b.cond.L.Lock()
 	defer b.cond.L.Unlock()
 	return b.bufferLen()
 }
 
-func (b *LinkBuffer) Close() bool {
+func (b *Buffer) Close() bool {
 	b.cond.L.Lock()
 	defer b.cond.L.Unlock()
 
@@ -38,7 +38,7 @@ func (b *LinkBuffer) Close() bool {
 	return true
 }
 
-func (b *LinkBuffer) Put(data []byte) bool {
+func (b *Buffer) Put(data []byte) bool {
 	b.cond.L.Lock()
 	defer b.cond.L.Unlock()
 
@@ -67,7 +67,7 @@ func (b *LinkBuffer) Put(data []byte) bool {
 	return true
 }
 
-func (b *LinkBuffer) Pop() ([]byte, bool) {
+func (b *Buffer) Pop() ([]byte, bool) {
 	for {
 		b.cond.L.Lock()
 		if b.bufferLen() > 0 {
@@ -85,9 +85,9 @@ func (b *LinkBuffer) Pop() ([]byte, bool) {
 	}
 }
 
-func NewLinkBuffer(sz int) *LinkBuffer {
+func NewBuffer(sz int) *Buffer {
 	var l sync.Mutex
-	return &LinkBuffer{
+	return &Buffer{
 		buf:   make([][]byte, sz),
 		start: 0,
 		end:   0,

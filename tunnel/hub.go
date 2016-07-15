@@ -17,96 +17,94 @@ const (
 	LINK_CLOSE
 	LINK_CLOSE_RECV
 	LINK_CLOSE_SEND
+	TUN_HEARTBEAT
 )
 
 type Cmd struct {
-	Cmd    uint8
-	Linkid uint16
+	Cmd uint8  // control command
+	Id  uint16 // id
 }
 
 type Hub struct {
-	tunnel   *Tunnel
-	links    map[uint16]*Link
-	linkLock sync.RWMutex
+	tunnel *Tunnel
+
+	ll    sync.RWMutex // protect links
+	links map[uint16]*link
 
 	onCtrlFilter func(cmd Cmd) bool
 }
 
-func (hub *Hub) Send(cmd uint8, linkid uint16, data []byte) bool {
-	switch cmd {
-	case LINK_DATA:
-		Info("link(%d) send %d bytes data", linkid, len(data))
-	default:
-		buf := bytes.NewBuffer(mpool.Get()[0:0])
-		var body Cmd
-		body.Cmd = cmd
-		body.Linkid = linkid
-		binary.Write(buf, binary.LittleEndian, &body)
-
-		linkid = 0
-		data = buf.Bytes()
-		Info("link(%d) send cmd:%d", linkid, cmd)
+func (h *Hub) SendCmd(id uint16, cmd uint8) bool {
+	buf := bytes.NewBuffer(mpool.Get()[0:0])
+	c := Cmd{
+		Cmd: cmd,
+		Id:  id,
 	}
+	binary.Write(buf, binary.LittleEndian, &c)
+	Info("link(%d) send cmd:%d", id, cmd)
+	return h.Send(0, buf.Bytes())
+}
 
-	if err := hub.tunnel.Write(linkid, data); err != nil {
-		Error("link(%d) write to %s failed:%s", linkid, hub.tunnel, err.Error())
+func (h *Hub) Send(id uint16, data []byte) bool {
+	if err := h.tunnel.WritePacket(id, data); err != nil {
+		Error("link(%d) write to %s failed:%s", id, h.tunnel, err.Error())
 		return false
 	}
 	return true
 }
 
-func (hub *Hub) onCtrl(cmd Cmd) {
-	if hub.onCtrlFilter != nil && hub.onCtrlFilter(cmd) {
+func (h *Hub) onCtrl(cmd Cmd) {
+	if h.onCtrlFilter != nil && h.onCtrlFilter(cmd) {
 		return
 	}
 
-	linkid := cmd.Linkid
-	link := hub.getLink(linkid)
-	if link == nil {
-		Error("link(%d) recv cmd:%d, no link", linkid, cmd.Cmd)
+	id := cmd.Id
+	l := h.getLink(id)
+	if l == nil {
+		Error("link(%d) recv cmd:%d, no link", id, cmd.Cmd)
 		return
 	}
 
 	switch cmd.Cmd {
 	case LINK_CLOSE:
-		link.resetRSflag()
+		l.aclose()
 	case LINK_CLOSE_RECV:
-		link.resetSflag()
+		l.rclose()
 	case LINK_CLOSE_SEND:
-		link.resetRflag()
+		l.wclose()
 	default:
-		Error("link(%d) receive unknown cmd:%v", linkid, cmd)
+		Error("link(%d) receive unknown cmd:%v", id, cmd)
 	}
 }
 
-func (hub *Hub) onData(linkid uint16, data []byte) {
-	link := hub.getLink(linkid)
+func (h *Hub) onData(id uint16, data []byte) {
+	link := h.getLink(id)
 
 	if link == nil {
 		mpool.Put(data)
-		Error("link(%d) no link", linkid)
+		Error("link(%d) no link", id)
 		return
 	}
 
-	if !link.putData(data) {
+	if !link.write(data) {
 		mpool.Put(data)
-		Error("link(%d) put data failed", linkid)
+		Error("link(%d) put data failed", id)
 		return
 	}
 	return
 }
 
-func (hub *Hub) Start() {
-	defer hub.tunnel.Close()
+func (h *Hub) Start() {
+	defer h.tunnel.Close()
 
 	for {
-		linkid, data, err := hub.tunnel.Read()
+		id, data, err := h.tunnel.ReadPacket()
 		if err != nil {
-			Error("%s read failed:%v", hub.tunnel, err)
+			Error("%s read failed:%v", h.tunnel, err)
 			break
 		}
 
-		if linkid == 0 {
+		if id == 0 {
 			var cmd Cmd
 			buf := bytes.NewBuffer(data)
 			err := binary.Read(buf, binary.LittleEndian, &cmd)
@@ -115,64 +113,46 @@ func (hub *Hub) Start() {
 				Error("parse message failed:%s, break dispatch", err.Error())
 				break
 			}
-			Info("link(%d) recv cmd:%d", cmd.Linkid, cmd.Cmd)
-			hub.onCtrl(cmd)
+			Info("link(%d) recv cmd:%d", cmd.Id, cmd.Cmd)
+			h.onCtrl(cmd)
 		} else {
-			Info("link(%d) recv %d bytes data", linkid, len(data))
-			hub.onData(linkid, data)
+			Info("link(%d) recv %d bytes data", id, len(data))
+			h.onData(id, data)
 		}
 	}
 
 	// tunnel disconnect, so reset all link
 	Error("reset all link")
-	hub.resetAllLink()
-	Log("hub(%s) quit", hub.tunnel)
+	h.resetAllLink()
+	Log("hub(%s) quit", h.tunnel)
 }
 
-func (hub *Hub) Status() {
-	hub.linkLock.RLock()
-	defer hub.linkLock.RUnlock()
+func (h *Hub) Close() {
+	h.tunnel.Close()
+}
+
+func (h *Hub) Status() {
+	h.ll.RLock()
+	defer h.ll.RUnlock()
 	var links []uint16
-	for linkid := range hub.links {
-		links = append(links, linkid)
+	for id := range h.links {
+		links = append(links, id)
 	}
-	Log("<status> %s, %d links(%v)", hub.tunnel, len(hub.links), links)
+	Log("<status> %s, %d links(%v)", h.tunnel, len(h.links), links)
 }
 
-func (hub *Hub) resetAllLink() {
-	hub.linkLock.RLock()
-	defer hub.linkLock.RUnlock()
+func (h *Hub) resetAllLink() {
+	h.ll.RLock()
+	defer h.ll.RUnlock()
 
-	for _, link := range hub.links {
-		link.resetRSflag()
+	for _, l := range h.links {
+		l.aclose()
 	}
-}
-
-func (hub *Hub) getLink(linkid uint16) *Link {
-	hub.linkLock.RLock()
-	defer hub.linkLock.RUnlock()
-	return hub.links[linkid]
-}
-
-func (hub *Hub) deleteLink(linkid uint16) {
-	hub.linkLock.Lock()
-	defer hub.linkLock.Unlock()
-	delete(hub.links, linkid)
-}
-
-func (hub *Hub) setLink(linkid uint16, link *Link) bool {
-	hub.linkLock.Lock()
-	defer hub.linkLock.Unlock()
-	if _, ok := hub.links[linkid]; ok {
-		return false
-	}
-	hub.links[linkid] = link
-	return true
 }
 
 func newHub(tunnel *Tunnel) *Hub {
 	return &Hub{
 		tunnel: tunnel,
-		links:  make(map[uint16]*Link),
+		links:  make(map[uint16]*link),
 	}
 }

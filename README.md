@@ -1,7 +1,5 @@
 ## gotunnel
-gotunnel is a secure tcp tunnel software. It use persistent tcp connection(s) to comminicate bettwen client and server, so it's not a port forwarder.
-
-*now gotunnel support use udt protocal as low level tunnel, it can maximize your network bandwidth!*
+gotunnel is a secure tcp tunnel software. It can use tcp or udp connectioin as low level tunnel.
 
 gotunnel could be added to any c/s system using tcp protocal. Make system structure evolve from
 ```
@@ -15,11 +13,25 @@ to gain gotunnel's valuable features, such as secure and persistent.
 
 ## build
 
-In your go workspace, run command as below:
+1. download codebase
 ```bash
-go get -u github.com/xjdrew/gotunnel
+go get -u -d github.com/xjdrew/gotunnel
 ```
-If you don't known how to create a golang workspace, please see [install.sh](https://github.com/xjdrew/gotunnel/blob/master/install.sh)
+
+2. build udt
+```bash
+cd ${GOPATH}/src/github.com/xjdrew/go-udtwrapper/udt4/src && make libudt.a && cp libudt.a ${GOPATH}
+```
+
+3. build gotunnel
+```bash
+GOPATH=${GOPATH} CGO_LDFLAGS=-L${GOPATH} go install github.com/xjdrew/gotunnel
+```
+
+Or you can run the script [install.sh](https://github.com/xjdrew/gotunnel/blob/master/install.sh) directly:
+```
+bash <<(curl -fsSL https://github.com/xjdrew/gotunnel/blob/master/install.sh)
+```
 
 ## Usage
 

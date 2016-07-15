@@ -155,18 +155,24 @@ func (cli *Client) handleConn(hub *HubItem, conn *net.TCPConn) {
 	h.startLink(l, conn)
 }
 
-func (cli *Client) listen() {
+func (cli *Client) listen() error {
 	ln, err := net.Listen("tcp", cli.laddr)
 	if err != nil {
-		Panic("listen failed:%v", err)
+		return err
 	}
+
+	defer ln.Close()
 
 	tcpListener := ln.(*net.TCPListener)
 	for {
 		conn, err := tcpListener.AcceptTCP()
 		if err != nil {
-			Log("acceept failed:%s", err.Error())
-			break
+			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+				Log("acceept failed temporary: %s", netErr.Error())
+				continue
+			} else {
+				return err
+			}
 		}
 		Info("new connection from %v", conn.RemoteAddr())
 		hub := cli.fetchHub()
@@ -205,8 +211,7 @@ func (cli *Client) Start() error {
 		}(i)
 	}
 
-	go cli.listen()
-	return nil
+	return cli.listen()
 }
 
 func (cli *Client) Status() {

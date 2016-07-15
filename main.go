@@ -68,9 +68,9 @@ func main() {
 		return
 	}
 
-	if err = app.Start(); err != nil {
-		fmt.Fprintf(os.Stderr, "start failed:%s\n", err.Error())
-		return
-	}
-	handleSignal(app)
+	// waiting for signal
+	go handleSignal(app)
+
+	// start app
+	tunnel.Log("exit: %v", app.Start())
 }

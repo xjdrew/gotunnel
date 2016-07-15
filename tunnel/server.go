@@ -95,26 +95,27 @@ func (s *Server) handleConn(conn net.Conn) {
 	h.Start()
 }
 
-func (s *Server) listen() {
+func (s *Server) Start() error {
+	defer s.ln.Close()
 	for {
 		conn, err := s.ln.Accept()
 		if err != nil {
-			Error("acceept failed:%s", err.Error())
-			break
+			if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+				Log("acceept failed temporary: %s", netErr.Error())
+				continue
+			} else {
+				return err
+			}
 		}
 		Log("new connection from %v", conn.RemoteAddr())
 		go s.handleConn(conn)
 	}
 }
 
-func (s *Server) Start() error {
-	go s.listen()
-	return nil
-}
-
 func (s *Server) Status() {
 }
 
+// create a tunnel server
 func NewServer(listen, backend, secret string) (*Server, error) {
 	ln, err := newListener(listen)
 	if err != nil {

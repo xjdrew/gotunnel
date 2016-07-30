@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/xjdrew/gotunnel.svg?branch=master)](https://travis-ci.org/xjdrew/gotunnel)
+
 ## gotunnel
 gotunnel is a secure tcp tunnel software. It can use tcp or udp connectioin as low level tunnel.
 
@@ -13,20 +15,21 @@ to gain gotunnel's valuable features, such as secure and persistent.
 
 ## build
 
-1. download codebase
+#####1. download codebase
 ```bash
 go get -u -d github.com/xjdrew/gotunnel
 ```
-2. build udt
+#####2. build udt
 ```bash
 cd ${GOPATH}/src/github.com/xjdrew/go-udtwrapper/udt4/src && make libudt.a && cp libudt.a ${GOPATH}
 ```
-3. build gotunnel
+#####3. build gotunnel
 ```bash
 GOPATH=${GOPATH} CGO_LDFLAGS=-L${GOPATH} go install github.com/xjdrew/gotunnel
 ```
 
 * build automatically
+
 You can run the script [install.sh](https://github.com/xjdrew/gotunnel/blob/master/install.sh) directly:
 ```
 bash <<(curl -fsSL https://github.com/xjdrew/gotunnel/blob/master/install.sh)

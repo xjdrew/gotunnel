@@ -15,15 +15,15 @@ to gain gotunnel's valuable features, such as secure and persistent.
 
 ## build
 
-#####1. download codebase
+###1. download codebase
 ```bash
 go get -u -d github.com/xjdrew/gotunnel
 ```
-#####2. build udt
+###2. build udt
 ```bash
 cd ${GOPATH}/src/github.com/xjdrew/go-udtwrapper/udt4/src && make libudt.a && cp libudt.a ${GOPATH}
 ```
-#####3. build gotunnel
+###3. build gotunnel
 ```bash
 GOPATH=${GOPATH} CGO_LDFLAGS=-L${GOPATH} go install github.com/xjdrew/gotunnel
 ```

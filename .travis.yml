@@ -1,0 +1,11 @@
+language: go
+
+go:
+    - 1.6
+    - tip
+
+install: get-deps
+
+script:
+    go test -v ./tunnel/
+

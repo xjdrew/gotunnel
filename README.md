@@ -32,7 +32,7 @@ GOPATH=${GOPATH} CGO_LDFLAGS=-L${GOPATH} go install github.com/xjdrew/gotunnel
 
 You can run the script [install.sh](https://github.com/xjdrew/gotunnel/blob/master/install.sh) directly:
 ```
-bash <<(curl -fsSL https://github.com/xjdrew/gotunnel/blob/master/install.sh)
+bash <<(curl -fsSL https://raw.githubusercontent.com/xjdrew/gotunnel/master/install.sh)
 ```
 
 ## Usage

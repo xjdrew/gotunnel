@@ -74,7 +74,7 @@ It works fine but all traffic between your server and pc is plaintext, so someon
 
 First, on your server, resart squid to listen on a local port, for example **127.0.0.1:3128**. Then start gotunnel server listen on 8080 and use **127.0.0.1:3128** as backend.
 ```
-$ ./gotunnel -listen=:8001 -backend=127.0.0.1:3128 secret="your secret" -log=10 
+$ ./gotunnel -listen=:8001 -backend=127.0.0.1:3128 -secret="your secret" -log=10 
 ```
 Second, on your pc, start gotunnel client:
 ```
@@ -84,6 +84,30 @@ $ ./gotunnel -tunnels=100 -listen="127.0.0.1:8080" -backend="server:8001" -secre
 Then you can use squid3 on you local port as before, but all your traffic is encrypted. 
 
 Besides that, you don't need to create and destory tcp connection between your pc and server, because gotunnel use long-live tcp connections as low tunnel. In most cases, it would be faster.
+
+
+## Run with systemd service
+
+1. copy gotunnel binary to `/usr/local/bin/gotunnel`
+```bash
+sudo cp $GOPATH/bin/gotunnel /usr/local/bin/gotunnel
+
+```
+
+2. copy this repo's `systemd/gotunnel-server.service` or `systemd/gotunnel-client.service` to `/etc/systemd/system`
+
+3. start service
+```bash
+systemctl daemon-reload
+
+systemctl start gotunnel-server.service
+
+# or 
+
+systemctl start gotunnel-client.service
+
+```
+
 
 ## licence
 The MIT License (MIT)

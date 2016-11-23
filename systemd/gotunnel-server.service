@@ -1,0 +1,16 @@
+[Unit]
+Description=Gotunnel Server
+Documentation=https://github.com/xjdrew/gotunnel
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/gotunnel -listen=:8001 -backend=127.0.0.1:3128 -secret="your secret" -log=10
+Restart=always
+
+LimitNOFILE=1048576
+LimitNPROC=1048576
+LimitCORE=infinity
+
+[Install]
+WantedBy=multi-user.target

@@ -1,15 +1,23 @@
 #!/bin/bash
 
-#
+# Exec:
+#       sudo ./install_squid.sh
 # Test on:
 #     OS:     Ubuntu 16.04.2 LTS
 #     Kernel: Linux 4.9.7-x86_64-linode80
+#
 
-sudo apt-get install squid3
+# install
+apt-get install -y squid
+
+# backup conf
 cp /etc/squid/squid.conf /etc/squid/squid.conf.$(date +%Y%m%d%H%M%S)
+
+# config
+
 cat > /etc/squid/squid.conf << SQUIDCONF
 acl SSL_ports port 443
-acl Safe_ports port 1-65535	# unregistered ports
+acl Safe_ports port 1-65535     # unregistered ports
 acl CONNECT method CONNECT
 acl HEAD method HEAD
 
@@ -41,7 +49,7 @@ refresh_pattern ^ftp:           1440    20%     10080
 refresh_pattern ^gopher:        1440    0%      1440
 refresh_pattern -i (/cgi-bin/|\?) 0     0%      0
 refresh_pattern (Release|Packages(.gz)*)$      0       20%     2880
-refresh_pattern .		0	20%	4320
+refresh_pattern .               0       20%     4320
 
 # http options
 via off
@@ -70,12 +78,15 @@ ipcache_size 4096
 dns_nameservers 8.8.8.8 208.67.222.222 8.8.4.4 208.67.220.220
 
 # error page
-cache_mgr tu@dundishu.net
-visible_hostname dundishu.net
+cache_mgr admin@example.com
+visible_hostname example.com
 email_err_data off
 err_page_stylesheet none
 
 SQUIDCONF
 
 # restart
-sudo service squid3 restart
+systemctl restart squid
+
+# succeed
+echo "all done succeed!"

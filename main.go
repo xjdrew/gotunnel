@@ -50,7 +50,6 @@ func main() {
 	tunnels := flag.Uint("tunnels", 0, "low level tunnel count, 0 if work as server")
 	flag.IntVar(&tunnel.Timeout, "timeout", 30, "tunnel read/write timeout")
 	flag.UintVar(&tunnel.LogLevel, "log", 1, "log level")
-	flag.BoolVar(&tunnel.Udt, "udt", false, "udt tunnel")
 
 	flag.Usage = usage
 	flag.Parse()

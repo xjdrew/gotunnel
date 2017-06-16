@@ -19,6 +19,5 @@ const (
 var (
 	Timeout  int  = 0
 	LogLevel uint = 1
-	Udt      bool = false
 	mpool         = NewMPool(TunnelPacketSize)
 )

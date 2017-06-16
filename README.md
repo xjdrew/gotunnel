@@ -15,25 +15,10 @@ to gain gotunnel's valuable features, such as secure and persistent.
 
 ## build
 
-###1. download codebase
 ```bash
-go get -u -d github.com/xjdrew/gotunnel
-```
-###2. build udt
-```bash
-cd ${GOPATH}/src/github.com/xjdrew/go-udtwrapper/udt4/src && make libudt.a && cp libudt.a ${GOPATH}
-```
-###3. build gotunnel
-```bash
-GOPATH=${GOPATH} CGO_LDFLAGS=-L${GOPATH} go install github.com/xjdrew/gotunnel
+go install github.com/xjdrew/gotunnel
 ```
 
-* build automatically
-
-You can run the script [install.sh](https://github.com/xjdrew/gotunnel/blob/master/install.sh) directly:
-```
-bash <<(curl -fsSL https://raw.githubusercontent.com/xjdrew/gotunnel/master/install.sh)
-```
 
 ## Usage
 
@@ -51,8 +36,6 @@ usage: bin/gotunnel
         tunnel read/write timeout (default 3)
   -tunnels uint
         low level tunnel count, 0 if work as server
-  -udt
-        udt tunnel
 ```
 
 some options:

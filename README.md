@@ -3,7 +3,7 @@
 ## gotunnel
 gotunnel is a secure tcp tunnel software. It can use tcp or udp connectioin as low level tunnel.
 
-gotunnel could be added to any c/s system using tcp protocal. Make system structure evolve from
+gotunnel could be added to any c/s system using tcp protocol. Make system structure evolve from
 ```
 client <--------------> server
 ```

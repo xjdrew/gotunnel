@@ -21,13 +21,14 @@ type ClientHub struct {
 }
 
 func (h *ClientHub) heartbeat() {
-	c := time.Tick(1 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 
 	timeout := Timeout
 	if Timeout <= 0 {
 		timeout = TunnelMaxTimeout
 	}
-	for range c {
+	for range ticker.C {
 		// id overflow
 		span := h.sent - h.rcvd
 		if int(span) >= timeout {

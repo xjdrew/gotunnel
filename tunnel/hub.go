@@ -41,7 +41,13 @@ func (h *Hub) SendCmd(id uint16, cmd uint8) bool {
 		Id:  id,
 	}
 	binary.Write(buf, binary.LittleEndian, &c)
-	Info("link(%d) send cmd:%d", id, cmd)
+
+	if cmd == TUN_HEARTBEAT {
+		Debug("%s send heartbeat: %d", h.tunnel, id)
+	} else {
+		Info("link(%d) send cmd:%d", id, cmd)
+	}
+
 	return h.Send(0, buf.Bytes())
 }
 
@@ -54,6 +60,12 @@ func (h *Hub) Send(id uint16, data []byte) bool {
 }
 
 func (h *Hub) onCtrl(cmd Cmd) {
+	if cmd.Cmd == TUN_HEARTBEAT {
+		Debug("%s recv heartbeat: %d", h.tunnel, cmd.Id)
+	} else {
+		Info("link(%d) recv cmd:%d", cmd.Id, cmd.Cmd)
+	}
+
 	if h.onCtrlFilter != nil && h.onCtrlFilter(cmd) {
 		return
 	}
@@ -78,8 +90,9 @@ func (h *Hub) onCtrl(cmd Cmd) {
 }
 
 func (h *Hub) onData(id uint16, data []byte) {
-	link := h.getLink(id)
+	Info("link(%d) recv %d bytes data", id, len(data))
 
+	link := h.getLink(id)
 	if link == nil {
 		mpool.Put(data)
 		Error("link(%d) no link", id)
@@ -113,16 +126,13 @@ func (h *Hub) Start() {
 				Error("parse message failed:%s, break dispatch", err.Error())
 				break
 			}
-			Info("link(%d) recv cmd:%d", cmd.Id, cmd.Cmd)
 			h.onCtrl(cmd)
 		} else {
-			Info("link(%d) recv %d bytes data", id, len(data))
 			h.onData(id, data)
 		}
 	}
 
 	// tunnel disconnect, so reset all link
-	Error("reset all link")
 	h.resetAllLink()
 	Log("hub(%s) quit", h.tunnel)
 }
@@ -145,6 +155,7 @@ func (h *Hub) resetAllLink() {
 	h.ll.RLock()
 	defer h.ll.RUnlock()
 
+	Error("reset all %d links", len(h.links))
 	for _, l := range h.links {
 		l.aclose()
 	}

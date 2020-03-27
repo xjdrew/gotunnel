@@ -11,13 +11,14 @@ import (
 
 const (
 	TunnelMaxId           = ^uint16(0)
-	TunnelMaxTimeout      = 3600
+	TunnelMinSpan         = 3 // 3次心跳无回应则断开
 	TunnelPacketSize      = 8192
 	TunnelKeepAlivePeriod = time.Second * 180
 )
 
 var (
-	Timeout  int  = 0
-	LogLevel uint = 1
-	mpool         = NewMPool(TunnelPacketSize)
+	Heartbeat int  = 1
+	Timeout   int  = 0
+	LogLevel  uint = 1
+	mpool          = NewMPool(TunnelPacketSize)
 )

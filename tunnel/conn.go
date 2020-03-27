@@ -116,7 +116,7 @@ func (tun *Tunnel) ReadPacket() (linkid uint16, data []byte, err error) {
 	return
 }
 
-func (tun Tunnel) String() string {
+func (tun *Tunnel) String() string {
 	return fmt.Sprintf("tunnel[%s -> %s]", tun.Conn.LocalAddr(), tun.Conn.RemoteAddr())
 }
 

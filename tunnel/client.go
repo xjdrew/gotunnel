@@ -21,17 +21,18 @@ type ClientHub struct {
 }
 
 func (h *ClientHub) heartbeat() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(time.Duration(Heartbeat) * time.Second)
 	defer ticker.Stop()
 
-	timeout := Timeout
-	if Timeout <= 0 {
-		timeout = TunnelMaxTimeout
+	maxSpan := Timeout / Heartbeat
+	if maxSpan <= TunnelMinSpan {
+		maxSpan = TunnelMinSpan
 	}
+
 	for range ticker.C {
 		// id overflow
 		span := h.sent - h.rcvd
-		if int(span) >= timeout {
+		if int(span) >= maxSpan {
 			Error("tunnel(%v) timeout, sent:%d, rcvd:%d", h.Hub.tunnel, h.sent, h.rcvd)
 			h.Hub.Close()
 			break
@@ -189,11 +190,12 @@ func (cli *Client) listen() error {
 	}
 }
 
+// Start .
 func (cli *Client) Start() error {
 	sz := cap(cli.cq)
 	for i := 0; i < sz; i++ {
 		go func(index int) {
-			Recover()
+			defer Recover()
 
 			for {
 				hub, err := cli.createHub()

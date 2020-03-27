@@ -33,9 +33,6 @@ func (l *link) setRerr(err error) bool {
 	}
 
 	l.rerr = err
-	if l.conn != nil {
-		l.conn.CloseRead()
-	}
 	return true
 }
 
@@ -79,8 +76,6 @@ func (l *link) write(b []byte) bool {
 
 // inject data low level connection
 func (l *link) _write() error {
-	defer l.conn.CloseWrite()
-
 	for {
 		data, ok := l.wbuf.Pop()
 		if !ok {
@@ -118,11 +113,11 @@ func (h *Hub) deleteLink(id uint16) {
 }
 
 func (h *Hub) createLink(id uint16) *link {
-	Info("link(%d) new link", id)
+	Info("link(%d) new link over %s", id, h.tunnel)
 	h.ll.Lock()
 	defer h.ll.Unlock()
 	if _, ok := h.links[id]; ok {
-		Error("link(%d) repeated", id)
+		Error("link(%d) repeated over %s", id, h.tunnel)
 		return nil
 	}
 	l := &link{
@@ -143,6 +138,8 @@ func (h *Hub) startLink(l *link, conn *net.TCPConn) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer l.conn.CloseRead()
+
 		for {
 			data, err := l.read()
 			if err != nil {
@@ -159,6 +156,8 @@ func (h *Hub) startLink(l *link, conn *net.TCPConn) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer l.conn.CloseWrite()
+
 		err := l._write()
 		if err != errPeerClosed {
 			h.SendCmd(l.id, LINK_CLOSE_RECV)

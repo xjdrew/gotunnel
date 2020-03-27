@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-// client hub
+// ClientHub manages client links
 type ClientHub struct {
 	*Hub
 	sent uint16
@@ -21,17 +21,18 @@ type ClientHub struct {
 }
 
 func (h *ClientHub) heartbeat() {
-	ticker := time.NewTicker(time.Duration(Heartbeat) * time.Second)
+	heartbeat := getHeartbeat()
+	ticker := time.NewTicker(heartbeat)
 	defer ticker.Stop()
 
-	maxSpan := Timeout / Heartbeat
-	if maxSpan <= TunnelMinSpan {
-		maxSpan = TunnelMinSpan
+	maxSpan := int(getTimeout() / heartbeat)
+	if maxSpan <= tunnelMinSpan {
+		maxSpan = tunnelMinSpan
 	}
-
+	Debug("maxspan: %d", maxSpan)
 	for range ticker.C {
 		// id overflow
-		span := h.sent - h.rcvd
+		span := 0xffff - h.rcvd + h.sent + 1
 		if int(span) >= maxSpan {
 			Error("tunnel(%v) timeout, sent:%d, rcvd:%d", h.Hub.tunnel, h.sent, h.rcvd)
 			h.Hub.Close()

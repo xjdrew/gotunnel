@@ -16,6 +16,7 @@ import (
 	"github.com/xjdrew/gotunnel/tunnel"
 )
 
+// Service .
 type Service interface {
 	Start() error
 	Status()

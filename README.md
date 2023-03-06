@@ -57,11 +57,11 @@ It works fine but all traffic between your server and pc is plaintext, so someon
 
 First, on your server, resart squid to listen on a local port, for example **127.0.0.1:3128**. Then start gotunnel server listen on 8080 and use **127.0.0.1:3128** as backend.
 ```
-$ ./gotunnel -listen=:8001 -backend=127.0.0.1:3128 -secret="your secret" -log=10 
+$ ./gotunnel -listen=:8080 -backend=127.0.0.1:3128 -secret="your secret" -log=10 
 ```
 Second, on your pc, start gotunnel client:
 ```
-$ ./gotunnel -tunnels=100 -listen="127.0.0.1:8080" -backend="server:8001" -secret="your secret" -log=10 
+$ ./gotunnel -tunnels=100 -listen="127.0.0.1:8080" -backend="server:8080" -secret="your secret" -log=10 
 ```
 
 Then you can use squid3 on you local port as before, but all your traffic is encrypted. 
